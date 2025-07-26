@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using LaCazuelaChapina.API.Data;
 using FluentValidation;
 using System.Reflection;
+using LaCazuelaChapina.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,8 @@ builder.Services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
 // 3. Configurar FluentValidation
 builder.Services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
 
 // 4. Configurar Controllers con validación
 builder.Services.AddControllers()
@@ -109,10 +112,16 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 7. Configurar servicios de aplicación (los agregaremos después)
-// builder.Services.AddScoped<IProductoService, ProductoService>();
-// builder.Services.AddScoped<IVentaService, VentaService>();
-// builder.Services.AddScoped<IInventarioService, InventarioService>();
+// 7. Configurar servicios de aplicación
+builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
+
+// Configurar HttpClient para OpenRouter con configuración específica
+builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>("OpenRouter", client =>
+{
+    client.BaseAddress = new Uri("https://openrouter.ai/api/v1/");
+    client.DefaultRequestHeaders.Add("User-Agent", "LaCazuelaChapina/1.0");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // 8. Configurar HttpClient para integraciones LLM
 builder.Services.AddHttpClient("OpenRouter", client =>
