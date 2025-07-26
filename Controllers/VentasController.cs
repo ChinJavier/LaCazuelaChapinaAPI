@@ -1,8 +1,3 @@
-// =============================================
-// ARCHIVO: Controllers/VentasController.cs
-// Controlador para sistema de ventas
-// =============================================
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper;
@@ -10,14 +5,9 @@ using LaCazuelaChapina.API.Data;
 using LaCazuelaChapina.API.Models.Ventas;
 using LaCazuelaChapina.API.Models.Enums;
 using LaCazuelaChapina.API.DTOs.Ventas;
-using LaCazuelaChapina.API.Services;
-using LaCazuelaChapina.API.Mappings;
 
 namespace LaCazuelaChapina.API.Controllers
 {
-    /// <summary>
-    /// Controlador para el sistema de ventas
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
@@ -40,8 +30,6 @@ namespace LaCazuelaChapina.API.Controllers
         /// <summary>
         /// Registra una nueva venta
         /// </summary>
-        /// <param name="crearVentaDto">Datos de la venta</param>
-        /// <returns>Venta registrada</returns>
         [HttpPost]
         [ProducesResponseType(typeof(VentaDto), 201)]
         [ProducesResponseType(400)]
@@ -58,7 +46,7 @@ namespace LaCazuelaChapina.API.Controllers
                 if (sucursal == null)
                     return BadRequest(new { message = "Sucursal no válida" });
 
-                // Generar número de venta
+                // Generar número de venta único
                 var fechaHoy = DateTime.UtcNow.Date;
                 var ventasHoy = await _context.Ventas
                     .Where(v => v.SucursalId == crearVentaDto.SucursalId && v.FechaVenta.Date == fechaHoy)
@@ -84,11 +72,10 @@ namespace LaCazuelaChapina.API.Controllers
 
                 decimal subtotalVenta = 0;
 
-                // Procesar detalles de venta
+                // Procesar cada detalle de venta
                 foreach (var detalleDto in crearVentaDto.Detalles)
                 {
                     decimal precioUnitario = 0;
-                    decimal subtotalDetalle = 0;
 
                     // Calcular precio según sea producto individual o combo
                     if (detalleDto.ComboId.HasValue)
@@ -114,7 +101,7 @@ namespace LaCazuelaChapina.API.Controllers
 
                         precioUnitario = producto.PrecioBase * variante.Multiplicador;
 
-                        // Calcular precios adicionales por personalización
+                        // Sumar precios de personalizaciones
                         if (detalleDto.Personalizaciones?.Any() == true)
                         {
                             var opcionesIds = detalleDto.Personalizaciones.Select(p => p.OpcionAtributoId).ToList();
@@ -127,10 +114,10 @@ namespace LaCazuelaChapina.API.Controllers
                     }
                     else
                     {
-                        return BadRequest(new { message = "Detalle de venta inválido" });
+                        return BadRequest(new { message = "Detalle de venta inválido: debe especificar producto+variante O combo" });
                     }
 
-                    subtotalDetalle = precioUnitario * detalleDto.Cantidad;
+                    decimal subtotalDetalle = precioUnitario * detalleDto.Cantidad;
                     subtotalVenta += subtotalDetalle;
 
                     // Crear detalle de venta
@@ -149,7 +136,7 @@ namespace LaCazuelaChapina.API.Controllers
                     _context.DetalleVentas.Add(detalleVenta);
                     await _context.SaveChangesAsync();
 
-                    // Crear personalizaciones
+                    // Crear personalizaciones si existen
                     if (detalleDto.Personalizaciones?.Any() == true)
                     {
                         foreach (var personalizacionDto in detalleDto.Personalizaciones)
@@ -176,51 +163,34 @@ namespace LaCazuelaChapina.API.Controllers
 
                 // Actualizar totales de venta
                 venta.Subtotal = subtotalVenta;
-                venta.Descuento = 0; // Por ahora sin descuentos
+                venta.Descuento = 0; // Sin descuentos por ahora
                 venta.Total = subtotalVenta;
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // TODO: Actualizar inventario automáticamente
-                // TODO: Enviar notificación push
-
                 // Obtener venta completa para respuesta
-                var ventaCompleta = await _context.Ventas
-                    .Include(v => v.Sucursal)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Producto)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.VarianteProducto)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Combo)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Personalizaciones)
-                            .ThenInclude(pv => pv.TipoAtributo)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Personalizaciones)
-                            .ThenInclude(pv => pv.OpcionAtributo)
-                    .FirstAsync(v => v.Id == venta.Id);
-
+                var ventaCompleta = await GetVentaCompleta(venta.Id);
                 var ventaDto = _mapper.Map<VentaDto>(ventaCompleta);
 
-                _logger.LogInformation("Venta {NumeroVenta} registrada por Q{Total}",
+                _logger.LogInformation("💰 Venta {NumeroVenta} registrada por Q{Total}", 
                     venta.NumeroVenta, venta.Total);
 
                 return CreatedAtAction(nameof(GetVenta), new { id = venta.Id }, ventaDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error registrando venta");
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error registrando venta");
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Obtiene una venta por ID
         /// </summary>
-        /// <param name="id">ID de la venta</param>
-        /// <returns>Venta con detalles completos</returns>
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(VentaDto), 200)]
         [ProducesResponseType(404)]
@@ -228,25 +198,11 @@ namespace LaCazuelaChapina.API.Controllers
         {
             try
             {
-                var venta = await _context.Ventas
-                    .Include(v => v.Sucursal)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Producto)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.VarianteProducto)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Combo)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Personalizaciones)
-                            .ThenInclude(pv => pv.TipoAtributo)
-                    .Include(v => v.Detalles)
-                        .ThenInclude(dv => dv.Personalizaciones)
-                            .ThenInclude(pv => pv.OpcionAtributo)
-                    .FirstOrDefaultAsync(v => v.Id == id);
+                var venta = await GetVentaCompleta(id);
 
                 if (venta == null)
                 {
-                    _logger.LogWarning("Venta con ID {Id} no encontrada", id);
+                    _logger.LogWarning("⚠️ Venta con ID {Id} no encontrada", id);
                     return NotFound(new { message = $"Venta con ID {id} no encontrada" });
                 }
 
@@ -255,20 +211,17 @@ namespace LaCazuelaChapina.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo venta {Id}", id);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo venta {Id}", id);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Obtiene ventas por sucursal con filtros opcionales
         /// </summary>
-        /// <param name="sucursalId">ID de la sucursal</param>
-        /// <param name="fechaDesde">Fecha desde (opcional)</param>
-        /// <param name="fechaHasta">Fecha hasta (opcional)</param>
-        /// <param name="pagina">Número de página</param>
-        /// <param name="tamanoPagina">Tamaño de página</param>
-        /// <returns>Lista paginada de ventas</returns>
         [HttpGet("sucursal/{sucursalId}")]
         [ProducesResponseType(typeof(VentasPaginadasDto), 200)]
         public async Task<ActionResult<VentasPaginadasDto>> GetVentasPorSucursal(
@@ -282,6 +235,7 @@ namespace LaCazuelaChapina.API.Controllers
             {
                 var query = _context.Ventas
                     .Include(v => v.Sucursal)
+                    .Include(v => v.Detalles)
                     .Where(v => v.SucursalId == sucursalId);
 
                 if (fechaDesde.HasValue)
@@ -291,7 +245,7 @@ namespace LaCazuelaChapina.API.Controllers
                     query = query.Where(v => v.FechaVenta.Date <= fechaHasta.Value.Date);
 
                 var totalVentas = await query.CountAsync();
-
+                
                 var ventas = await query
                     .OrderByDescending(v => v.FechaVenta)
                     .Skip((pagina - 1) * tamanoPagina)
@@ -309,23 +263,24 @@ namespace LaCazuelaChapina.API.Controllers
                     TotalPaginas = (int)Math.Ceiling((double)totalVentas / tamanoPagina)
                 };
 
-                _logger.LogInformation("Se obtuvieron {Count} ventas para sucursal {SucursalId}",
+                _logger.LogInformation("✅ Se obtuvieron {Count} ventas para sucursal {SucursalId}", 
                     ventas.Count, sucursalId);
 
                 return Ok(resultado);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo ventas por sucursal {SucursalId}", sucursalId);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo ventas por sucursal {SucursalId}", sucursalId);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Obtiene ventas del día actual por sucursal
         /// </summary>
-        /// <param name="sucursalId">ID de la sucursal</param>
-        /// <returns>Ventas del día</returns>
         [HttpGet("sucursal/{sucursalId}/hoy")]
         [ProducesResponseType(typeof(List<VentaResumenDto>), 200)]
         public async Task<ActionResult<List<VentaResumenDto>>> GetVentasHoy(int sucursalId)
@@ -336,98 +291,98 @@ namespace LaCazuelaChapina.API.Controllers
 
                 var ventas = await _context.Ventas
                     .Include(v => v.Sucursal)
+                    .Include(v => v.Detalles)
                     .Where(v => v.SucursalId == sucursalId && v.FechaVenta.Date == fechaHoy)
                     .OrderByDescending(v => v.FechaVenta)
                     .ToListAsync();
 
                 var ventasDto = _mapper.Map<List<VentaResumenDto>>(ventas);
 
-                _logger.LogInformation("Se obtuvieron {Count} ventas del día para sucursal {SucursalId}",
+                _logger.LogInformation("✅ Se obtuvieron {Count} ventas del día para sucursal {SucursalId}", 
                     ventas.Count, sucursalId);
 
                 return Ok(ventasDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo ventas del día para sucursal {SucursalId}", sucursalId);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo ventas del día para sucursal {SucursalId}", sucursalId);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
-        /// Cancela una venta (si está permitido)
+        /// Obtiene resumen de ventas por sucursal
         /// </summary>
-        /// <param name="id">ID de la venta</param>
-        /// <param name="motivo">Motivo de cancelación</param>
-        /// <returns>Resultado de la operación</returns>
-        [HttpPatch("{id}/cancelar")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(404)]
-        public async Task<ActionResult> CancelarVenta(int id, [FromBody] CancelarVentaDto cancelarDto)
+        [HttpGet("resumen/{sucursalId}")]
+        [ProducesResponseType(typeof(object), 200)]
+        public async Task<ActionResult> GetResumenVentas(int sucursalId)
         {
             try
             {
-                var venta = await _context.Ventas.FindAsync(id);
+                var fechaHoy = DateTime.UtcNow.Date;
+                var fechaInicioMes = new DateTime(fechaHoy.Year, fechaHoy.Month, 1);
 
-                if (venta == null)
-                    return NotFound(new { message = "Venta no encontrada" });
+                var resumen = new
+                {
+                    VentasHoy = await _context.Ventas
+                        .Where(v => v.SucursalId == sucursalId && v.FechaVenta.Date == fechaHoy && v.EstadoVenta == EstadoVenta.Completada)
+                        .SumAsync(v => v.Total),
+                    
+                    VentasMes = await _context.Ventas
+                        .Where(v => v.SucursalId == sucursalId && v.FechaVenta >= fechaInicioMes && v.EstadoVenta == EstadoVenta.Completada)
+                        .SumAsync(v => v.Total),
+                    
+                    TransaccionesHoy = await _context.Ventas
+                        .Where(v => v.SucursalId == sucursalId && v.FechaVenta.Date == fechaHoy && v.EstadoVenta == EstadoVenta.Completada)
+                        .CountAsync(),
+                    
+                    TransaccionesMes = await _context.Ventas
+                        .Where(v => v.SucursalId == sucursalId && v.FechaVenta >= fechaInicioMes && v.EstadoVenta == EstadoVenta.Completada)
+                        .CountAsync(),
+                    
+                    TicketPromedio = await _context.Ventas
+                        .Where(v => v.SucursalId == sucursalId && v.FechaVenta >= fechaInicioMes && v.EstadoVenta == EstadoVenta.Completada)
+                        .AverageAsync(v => (double?)v.Total) ?? 0
+                };
 
-                if (venta.EstadoVenta == EstadoVenta.Cancelada)
-                    return BadRequest(new { message = "La venta ya está cancelada" });
+                _logger.LogInformation("📊 Resumen de ventas generado para sucursal {SucursalId}", sucursalId);
 
-                // Verificar que la venta sea del día actual (regla de negocio)
-                if (venta.FechaVenta.Date != DateTime.UtcNow.Date)
-                    return BadRequest(new { message = "Solo se pueden cancelar ventas del día actual" });
-
-                venta.EstadoVenta = EstadoVenta.Cancelada;
-
-                // TODO: Revertir movimientos de inventario
-                // TODO: Registrar motivo de cancelación en tabla de auditoría
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Venta {NumeroVenta} cancelada. Motivo: {Motivo}",
-                    venta.NumeroVenta, cancelarDto.Motivo);
-
-                return Ok(new { message = "Venta cancelada correctamente" });
+                return Ok(resumen);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error cancelando venta {Id}", id);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error generando resumen de ventas para sucursal {SucursalId}", sucursalId);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
-    }
 
-    // =============================================
-    // DTOs ESPECÍFICOS PARA VENTAS
-    // =============================================
+        // =============================================
+        // MÉTODOS PRIVADOS
+        // =============================================
 
-    public class VentasPaginadasDto
-    {
-        public List<VentaResumenDto> Ventas { get; set; } = new();
-        public int TotalVentas { get; set; }
-        public int PaginaActual { get; set; }
-        public int TamanoPagina { get; set; }
-        public int TotalPaginas { get; set; }
-    }
-
-    public class VentaResumenDto
-    {
-        public int Id { get; set; }
-        public string NumeroVenta { get; set; } = string.Empty;
-        public DateTime FechaVenta { get; set; }
-        public decimal Total { get; set; }
-        public TipoPago TipoPago { get; set; }
-        public EstadoVenta EstadoVenta { get; set; }
-        public string? ClienteNombre { get; set; }
-        public string SucursalNombre { get; set; } = string.Empty;
-        public int CantidadItems { get; set; }
-    }
-
-    public class CancelarVentaDto
-    {
-        public string Motivo { get; set; } = string.Empty;
+        private async Task<Venta?> GetVentaCompleta(int ventaId)
+        {
+            return await _context.Ventas
+                .Include(v => v.Sucursal)
+                .Include(v => v.Detalles)
+                    .ThenInclude(dv => dv.Producto)
+                .Include(v => v.Detalles)
+                    .ThenInclude(dv => dv.VarianteProducto)
+                .Include(v => v.Detalles)
+                    .ThenInclude(dv => dv.Combo)
+                .Include(v => v.Detalles)
+                    .ThenInclude(dv => dv.Personalizaciones)
+                        .ThenInclude(pv => pv.TipoAtributo)
+                .Include(v => v.Detalles)
+                    .ThenInclude(dv => dv.Personalizaciones)
+                        .ThenInclude(pv => pv.OpcionAtributo)
+                .FirstOrDefaultAsync(v => v.Id == ventaId);
+        }
     }
 }

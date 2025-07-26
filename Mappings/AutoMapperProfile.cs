@@ -42,14 +42,6 @@ namespace LaCazuelaChapina.API.Mappings
 
             // VarianteProducto -> VarianteProductoDto
             CreateMap<VarianteProducto, VarianteProductoDto>();
-
-            // TipoAtributo -> TipoAtributoDto
-            CreateMap<TipoAtributo, TipoAtributoDto>()
-                .ForMember(dest => dest.Opciones, 
-                    opt => opt.MapFrom(src => src.Opciones.Where(o => o.Activa).OrderBy(o => o.Orden)));
-
-            // OpcionAtributo -> OpcionAtributoDto
-            CreateMap<OpcionAtributo, OpcionAtributoDto>();
         }
 
         private void ConfigurePersonalizationMappings()
@@ -85,6 +77,7 @@ namespace LaCazuelaChapina.API.Mappings
 
         private void ConfigureSalesMappings()
         {
+            
             // CrearVentaDto -> Venta
             CreateMap<CrearVentaDto, Venta>()
                 .ForMember(dest => dest.FechaVenta, opt => opt.MapFrom(src => DateTime.UtcNow))
@@ -95,15 +88,22 @@ namespace LaCazuelaChapina.API.Mappings
             CreateMap<DetalleVentaDto, DetalleVenta>()
                 .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
 
-            // Venta -> VentaDto (para respuestas)
+            // Venta -> VentaDto
             CreateMap<Venta, VentaDto>()
                 .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal.Nombre))
                 .ForMember(dest => dest.Detalles, opt => opt.MapFrom(src => src.Detalles));
 
+            // Venta -> VentaResumenDto
+            CreateMap<Venta, VentaResumenDto>()
+                .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal.Nombre))
+                .ForMember(dest => dest.CantidadItems, opt => opt.MapFrom(src => src.Detalles.Sum(d => d.Cantidad)));
+
             // DetalleVenta -> DetalleVentaResponseDto
             CreateMap<DetalleVenta, DetalleVentaResponseDto>()
-                .ForMember(dest => dest.ProductoNombre, opt => opt.MapFrom(src => src.Producto != null ? src.Producto.Nombre : src.Combo!.Nombre))
-                .ForMember(dest => dest.VarianteNombre, opt => opt.MapFrom(src => src.VarianteProducto != null ? src.VarianteProducto.Nombre : null))
+                .ForMember(dest => dest.ProductoNombre, 
+                    opt => opt.MapFrom(src => src.Producto != null ? src.Producto.Nombre : src.Combo!.Nombre))
+                .ForMember(dest => dest.VarianteNombre, 
+                    opt => opt.MapFrom(src => src.VarianteProducto != null ? src.VarianteProducto.Nombre : null))
                 .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
 
             // PersonalizacionVenta -> PersonalizacionResponseDto
@@ -111,7 +111,6 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.TipoAtributoNombre, opt => opt.MapFrom(src => src.TipoAtributo.Nombre))
                 .ForMember(dest => dest.OpcionNombre, opt => opt.MapFrom(src => src.OpcionAtributo.Nombre));
         }
-
         private void ConfigureDashboardMappings()
         {
             // Mapeos específicos para dashboard se crearán según las consultas necesarias
