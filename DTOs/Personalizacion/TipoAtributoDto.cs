@@ -8,4 +8,5 @@ namespace LaCazuelaChapina.API.DTOs.Personalizacion
         public bool PermiteMultiple { get; set; }
         public List<OpcionAtributoDto> Opciones { get; set; } = new();
     }
+
 }

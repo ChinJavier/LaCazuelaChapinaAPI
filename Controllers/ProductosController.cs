@@ -1,8 +1,3 @@
-// =============================================
-// ARCHIVO: Controllers/ProductosController.cs
-// Controlador para gestión de productos
-// =============================================
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper;
@@ -11,9 +6,6 @@ using LaCazuelaChapina.API.DTOs.Productos;
 
 namespace LaCazuelaChapina.API.Controllers
 {
-    /// <summary>
-    /// Controlador para la gestión de productos (tamales y bebidas)
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
@@ -36,7 +28,6 @@ namespace LaCazuelaChapina.API.Controllers
         /// <summary>
         /// Obtiene todos los productos con sus variantes y atributos personalizables
         /// </summary>
-        /// <returns>Lista de productos disponibles</returns>
         [HttpGet]
         [ProducesResponseType(typeof(List<ProductoDto>), 200)]
         public async Task<ActionResult<List<ProductoDto>>> GetProductos()
@@ -45,8 +36,7 @@ namespace LaCazuelaChapina.API.Controllers
             {
                 var productos = await _context.Productos
                     .Include(p => p.Categoria)
-                        .ThenInclude(c => c.TiposAtributo
-                            .Where(ta => ta.EsObligatorio || ta.Opciones.Any(o => o.Activa)))
+                        .ThenInclude(c => c.TiposAtributo)
                         .ThenInclude(ta => ta.Opciones.Where(o => o.Activa).OrderBy(o => o.Orden))
                     .Include(p => p.Variantes.Where(v => v.Activa).OrderBy(v => v.Multiplicador))
                     .Where(p => p.Activo)
@@ -56,21 +46,22 @@ namespace LaCazuelaChapina.API.Controllers
 
                 var productosDto = _mapper.Map<List<ProductoDto>>(productos);
                 
-                _logger.LogInformation("Se obtuvieron {Count} productos", productosDto.Count);
+                _logger.LogInformation("✅ Se obtuvieron {Count} productos", productosDto.Count);
                 return Ok(productosDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo productos");
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo productos");
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Obtiene un producto específico por ID
         /// </summary>
-        /// <param name="id">ID del producto</param>
-        /// <returns>Producto con detalles completos</returns>
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ProductoDto), 200)]
         [ProducesResponseType(404)]
@@ -87,7 +78,7 @@ namespace LaCazuelaChapina.API.Controllers
 
                 if (producto == null)
                 {
-                    _logger.LogWarning("Producto con ID {Id} no encontrado", id);
+                    _logger.LogWarning("⚠️ Producto con ID {Id} no encontrado", id);
                     return NotFound(new { message = $"Producto con ID {id} no encontrado" });
                 }
 
@@ -96,16 +87,17 @@ namespace LaCazuelaChapina.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo producto {Id}", id);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo producto {Id}", id);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Obtiene productos por categoría (Tamales o Bebidas)
         /// </summary>
-        /// <param name="categoriaId">ID de la categoría</param>
-        /// <returns>Lista de productos de la categoría</returns>
         [HttpGet("categoria/{categoriaId}")]
         [ProducesResponseType(typeof(List<ProductoDto>), 200)]
         public async Task<ActionResult<List<ProductoDto>>> GetProductosPorCategoria(int categoriaId)
@@ -123,23 +115,24 @@ namespace LaCazuelaChapina.API.Controllers
 
                 var productosDto = _mapper.Map<List<ProductoDto>>(productos);
                 
-                _logger.LogInformation("Se obtuvieron {Count} productos para categoría {CategoriaId}", 
+                _logger.LogInformation("✅ Se obtuvieron {Count} productos para categoría {CategoriaId}", 
                     productosDto.Count, categoriaId);
                 
                 return Ok(productosDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error obteniendo productos por categoría {CategoriaId}", categoriaId);
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error obteniendo productos por categoría {CategoriaId}", categoriaId);
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
 
         /// <summary>
         /// Calcula el precio final de un producto con sus personalizaciones
         /// </summary>
-        /// <param name="request">Datos para cálculo de precio</param>
-        /// <returns>Precio calculado</returns>
         [HttpPost("calcular-precio")]
         [ProducesResponseType(typeof(CalculoPrecioResponseDto), 200)]
         public async Task<ActionResult<CalculoPrecioResponseDto>> CalcularPrecio(CalculoPrecioRequestDto request)
@@ -197,44 +190,52 @@ namespace LaCazuelaChapina.API.Controllers
                     Personalizaciones = personalizacionesDetalle
                 };
 
+                _logger.LogInformation("💰 Precio calculado: {ProductoNombre} = Q{PrecioFinal}", 
+                    producto.Nombre, response.PrecioFinal);
+
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error calculando precio");
-                return StatusCode(500, new { message = "Error interno del servidor" });
+                _logger.LogError(ex, "❌ Error calculando precio");
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
             }
         }
-    }
 
-    // =============================================
-    // DTOs ESPECÍFICOS PARA CÁLCULO DE PRECIOS
-    // =============================================
+        /// <summary>
+        /// Obtiene las categorías disponibles
+        /// </summary>
+        [HttpGet("categorias")]
+        [ProducesResponseType(typeof(List<object>), 200)]
+        public async Task<ActionResult> GetCategorias()
+        {
+            try
+            {
+                var categorias = await _context.Categorias
+                    .Where(c => c.Activa)
+                    .Select(c => new { 
+                        Id = c.Id, 
+                        Nombre = c.Nombre, 
+                        Descripcion = c.Descripcion,
+                        CantidadProductos = c.Productos.Count(p => p.Activo)
+                    })
+                    .OrderBy(c => c.Nombre)
+                    .ToListAsync();
 
-    public class CalculoPrecioRequestDto
-    {
-        public int ProductoId { get; set; }
-        public int VarianteId { get; set; }
-        public int Cantidad { get; set; } = 1;
-        public List<int>? PersonalizacionIds { get; set; }
-    }
-
-    public class CalculoPrecioResponseDto
-    {
-        public string ProductoNombre { get; set; } = string.Empty;
-        public string VarianteNombre { get; set; } = string.Empty;
-        public decimal PrecioBase { get; set; }
-        public decimal PrecioPersonalizaciones { get; set; }
-        public decimal PrecioTotal { get; set; }
-        public int Cantidad { get; set; }
-        public decimal PrecioFinal { get; set; }
-        public List<PersonalizacionPrecioDto> Personalizaciones { get; set; } = new();
-    }
-
-    public class PersonalizacionPrecioDto
-    {
-        public string TipoAtributo { get; set; } = string.Empty;
-        public string Opcion { get; set; } = string.Empty;
-        public decimal PrecioAdicional { get; set; }
+                _logger.LogInformation("✅ Se obtuvieron {Count} categorías", categorias.Count);
+                return Ok(categorias);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error obteniendo categorías");
+                return StatusCode(500, new { 
+                    message = "Error interno del servidor",
+                    error = ex.Message 
+                });
+            }
+        }
     }
 }

@@ -32,14 +32,24 @@ namespace LaCazuelaChapina.API.Mappings
 
         private void ConfigureProductMappings()
         {
-            // Producto -> ProductoDto
             CreateMap<Producto, ProductoDto>()
-                .ForMember(dest => dest.CategoriaNombre, opt => opt.MapFrom(src => src.Categoria.Nombre))
-                .ForMember(dest => dest.Variantes, opt => opt.MapFrom(src => src.Variantes))
-                .ForMember(dest => dest.AtributosPersonalizables, opt => opt.MapFrom(src => src.Categoria.TiposAtributo));
+                .ForMember(dest => dest.CategoriaNombre, 
+                    opt => opt.MapFrom(src => src.Categoria.Nombre))
+                .ForMember(dest => dest.Variantes, 
+                    opt => opt.MapFrom(src => src.Variantes.Where(v => v.Activa)))
+                .ForMember(dest => dest.AtributosPersonalizables, 
+                    opt => opt.MapFrom(src => src.Categoria.TiposAtributo));
 
             // VarianteProducto -> VarianteProductoDto
             CreateMap<VarianteProducto, VarianteProductoDto>();
+
+            // TipoAtributo -> TipoAtributoDto
+            CreateMap<TipoAtributo, TipoAtributoDto>()
+                .ForMember(dest => dest.Opciones, 
+                    opt => opt.MapFrom(src => src.Opciones.Where(o => o.Activa).OrderBy(o => o.Orden)));
+
+            // OpcionAtributo -> OpcionAtributoDto
+            CreateMap<OpcionAtributo, OpcionAtributoDto>();
         }
 
         private void ConfigurePersonalizationMappings()
