@@ -87,7 +87,24 @@ namespace LaCazuelaChapina.API.Data
             modelBuilder.HasPostgresEnum<TipoPago>("tipo_pago");
             modelBuilder.HasPostgresEnum<EstadoVenta>("estado_venta");
             modelBuilder.HasPostgresEnum<TipoNotificacion>("tipo_notificacion");
-        }
+
+                // Configurar conversiones explícitas para ENUMs
+            modelBuilder.Entity<Venta>()
+                .Property(e => e.EstadoVenta)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Venta>()
+                .Property(e => e.TipoPago)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<MovimientoInventario>()
+                .Property(e => e.TipoMovimiento)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Combo>()
+                .Property(e => e.TipoCombo)
+                .HasConversion<string>();
+                }
 
         private void ConfigureRelationships(ModelBuilder modelBuilder)
         {

@@ -15,6 +15,7 @@ using LaCazuelaChapina.API.DTOs.Ventas;
 using LaCazuelaChapina.API.DTOs.Combos;
 using LaCazuelaChapina.API.Models.Inventario;
 using LaCazuelaChapina.API.DTOs.Inventario;
+using LaCazuelaChapina.API.DTOs.Dashboard;
 
 namespace LaCazuelaChapina.API.Mappings
 {
@@ -29,6 +30,8 @@ namespace LaCazuelaChapina.API.Mappings
             ConfigurePersonalizationMappings();
             ConfigureComboMappings();
             ConfigureSalesMappings();
+            ConfigureDashboardMappings();
+            ConfigureInventoryMappings();
             ConfigureDashboardMappings();
         }
 
@@ -115,10 +118,20 @@ namespace LaCazuelaChapina.API.Mappings
         }
         private void ConfigureDashboardMappings()
         {
-            // Mapeos específicos para dashboard se crearán según las consultas necesarias
-            // Estos se implementarán cuando tengamos las consultas de dashboard listas
+            // La mayoría de los DTOs del dashboard se construyen directamente en el controller
+            // porque son consultas agregadas complejas, pero agregamos algunos mapeos útiles:
+
+            // Para mapear datos básicos cuando sea necesario
+            CreateMap<Venta, VentaPorDiaDto>()
+                .ForMember(dest => dest.Fecha, opt => opt.MapFrom(src => src.FechaVenta.Date))
+                .ForMember(dest => dest.DiaNombre, opt => opt.MapFrom(src => 
+                    src.FechaVenta.ToString("dddd", new System.Globalization.CultureInfo("es-ES"))))
+                .ForMember(dest => dest.MontoVentas, opt => opt.MapFrom(src => src.Total))
+                .ForMember(dest => dest.CantidadTransacciones, opt => opt.MapFrom(src => 1))
+                .ForMember(dest => dest.TicketPromedio, opt => opt.MapFrom(src => src.Total))
+                .ForMember(dest => dest.EsFestivo, opt => opt.MapFrom(src => false));
         }
-        
+
         private void ConfigureInventoryMappings()
         {
             // StockSucursal -> StockSucursalDto
@@ -130,11 +143,11 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.StockMinimo, opt => opt.MapFrom(src => src.MateriaPrima.StockMinimo))
                 .ForMember(dest => dest.StockMaximo, opt => opt.MapFrom(src => src.MateriaPrima.StockMaximo))
                 .ForMember(dest => dest.CostoPromedio, opt => opt.MapFrom(src => src.MateriaPrima.CostoPromedio))
-                .ForMember(dest => dest.PorcentajeStock, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.PorcentajeStock, opt => opt.MapFrom(src =>
                     src.MateriaPrima.StockMinimo > 0 ? (src.CantidadActual / src.MateriaPrima.StockMinimo) * 100 : 0))
-                .ForMember(dest => dest.ValorInventario, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.ValorInventario, opt => opt.MapFrom(src =>
                     src.CantidadActual * src.MateriaPrima.CostoPromedio))
-                .ForMember(dest => dest.RequiereReorden, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.RequiereReorden, opt => opt.MapFrom(src =>
                     src.CantidadActual <= src.MateriaPrima.StockMinimo))
                 .ForMember(dest => dest.EstadoStock, opt => opt.Ignore()); // Se calcula en el servicio
 
@@ -169,17 +182,17 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.FechaMovimiento, opt => opt.MapFrom(src => DateTime.UtcNow))
                 .ForMember(dest => dest.CostoUnitario, opt => opt.Ignore()) // Se toma del costo promedio
                 .ForMember(dest => dest.MontoTotal, opt => opt.Ignore()) // Se calcula después
-                .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src =>
                     $"{src.TipoMerma}: {src.Motivo}"));
 
             CreateMap<RegistrarAjusteDto, MovimientoInventario>()
                 .ForMember(dest => dest.TipoMovimiento, opt => opt.MapFrom(src => TipoMovimiento.Ajuste))
                 .ForMember(dest => dest.FechaMovimiento, opt => opt.MapFrom(src => DateTime.UtcNow))
-                .ForMember(dest => dest.Cantidad, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.Cantidad, opt => opt.MapFrom(src =>
                     Math.Abs(src.CantidadNueva - src.CantidadAnterior)))
                 .ForMember(dest => dest.CostoUnitario, opt => opt.Ignore()) // Se toma del costo promedio
                 .ForMember(dest => dest.MontoTotal, opt => opt.Ignore()) // Se calcula después
-                .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src =>
                     $"Ajuste por {src.Motivo} - Responsable: {src.ResponsableAjuste}"));
         }
     }
