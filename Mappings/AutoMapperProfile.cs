@@ -20,6 +20,7 @@ using LaCazuelaChapina.API.Models.Sucursales;
 using LaCazuelaChapina.API.DTOs.Sucursales;
 using LaCazuelaChapina.API.DTOs.Notificaciones;
 using LaCazuelaChapina.API.Models.Notificaciones;
+using LaCazuelaChapina.API.DTOs.LLM;
 
 namespace LaCazuelaChapina.API.Mappings
 {
@@ -38,6 +39,7 @@ namespace LaCazuelaChapina.API.Mappings
             ConfigureInventoryMappings();
             ConfigureSucursalesMappings();
             ConfigureNotificacionesMappings();
+            ConfigureLLMMappings();
         }
 
         private void ConfigureProductMappings()
@@ -123,6 +125,43 @@ namespace LaCazuelaChapina.API.Mappings
             CreateMap<Combo, ComboDto>()
                 .ForMember(dest => dest.Componentes, opt => opt.MapFrom(src => src.Componentes));
 
+            // Combo -> ComboDetalleDto
+            CreateMap<Combo, ComboDetalleDto>()
+                .ForMember(dest => dest.Componentes, opt => opt.MapFrom(src => src.Componentes))
+                .ForMember(dest => dest.VecesVendido, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.IngresosGenerados, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EstaVigente, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.UltimaVenta, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EstadoVigencia, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.PromedioVentasMensuales, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.RendimientoTexto, opt => opt.Ignore()); // Se calcula en el DTO
+
+            // Combo -> ComboEstacionalDto
+            CreateMap<Combo, ComboEstacionalDto>()
+                .ForMember(dest => dest.Componentes, opt => opt.MapFrom(src => src.Componentes))
+                .ForMember(dest => dest.DiasRestantes, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EstadoVigencia, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EsProximo, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.EstaVigente, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.IconoEstado, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.ColorEstado, opt => opt.Ignore()); // Se calcula en el DTO
+
+            // CrearComboDto -> Combo
+            CreateMap<CrearComboDto, Combo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.Activo, opt => opt.MapFrom(src => true))
+                .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore()) // Se establece en el controller
+                .ForMember(dest => dest.Componentes, opt => opt.Ignore()) // Se manejan por separado
+                .ForMember(dest => dest.DetalleVentas, opt => opt.Ignore());
+
+            // ActualizarComboDto -> Combo
+            CreateMap<ActualizarComboDto, Combo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoCombo, opt => opt.Ignore()) // No se puede cambiar el tipo
+                .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore())
+                .ForMember(dest => dest.Componentes, opt => opt.Ignore()) // Se manejan por separado
+                .ForMember(dest => dest.DetalleVentas, opt => opt.Ignore());
+
             // ComboComponente -> ComboComponenteDto
             CreateMap<ComboComponente, ComboComponenteDto>()
                 .ForMember(dest => dest.ProductoNombre, opt => opt.MapFrom(src => src.Producto != null ? src.Producto.Nombre : src.NombreEspecial))
@@ -130,11 +169,12 @@ namespace LaCazuelaChapina.API.Mappings
 
             // ComboComponenteDto -> ComboComponente (para creación/edición)
             CreateMap<ComboComponenteDto, ComboComponente>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.ComboId, opt => opt.Ignore()) // Se establece en el controller
                 .ForMember(dest => dest.Producto, opt => opt.Ignore())
                 .ForMember(dest => dest.VarianteProducto, opt => opt.Ignore())
                 .ForMember(dest => dest.Combo, opt => opt.Ignore());
         }
-
         private void ConfigureSalesMappings()
         {
 
@@ -322,6 +362,21 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.Enviada, opt => opt.MapFrom(src => false))
                 .ForMember(dest => dest.FechaEnvio, opt => opt.Ignore())
                 .ForMember(dest => dest.Sucursal, opt => opt.Ignore());
+        }
+
+                private void ConfigureLLMMappings()
+        {
+            // Mapeos básicos para DTOs de LLM (la mayoría se construyen manualmente)
+            CreateMap<AsistentePedidoRequestDto, AsistentePedidoResponseDto>()
+                .ForMember(dest => dest.Recomendaciones, opt => opt.Ignore())
+                .ForMember(dest => dest.TotalAproximado, opt => opt.Ignore())
+                .ForMember(dest => dest.MensajePersonalizado, opt => opt.Ignore())
+                .ForMember(dest => dest.ConsejosAdicionales, opt => opt.Ignore())
+                .ForMember(dest => dest.FechaRecomendacion, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.ConfianzaRecomendacion, opt => opt.MapFrom(src => "Alta"));
+
+            // La mayoría de mapeos de LLM se hacen manualmente en el controller
+            // porque involucran procesamiento de IA y construcción dinámica de respuestas
         }
     }
 
