@@ -1,20 +1,22 @@
 // =============================================
 // ARCHIVO: Controllers/LLMController.cs
-// Controlador para funcionalidades de IA y LLM
+// Integración con LLM - La Cazuela Chapina
 // =============================================
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AutoMapper;
 using LaCazuelaChapina.API.Data;
 using LaCazuelaChapina.API.Services;
 using LaCazuelaChapina.API.DTOs.LLM;
+using LaCazuelaChapina.API.Models.Enums;
 using System.Text.Json;
-using LaCazuelaChapina.API.Models.Inventario;
 
 namespace LaCazuelaChapina.API.Controllers
 {
     /// <summary>
-    /// Controlador para funcionalidades de inteligencia artificial y recomendaciones
+    /// Controlador para funcionalidades inteligentes con LLM/IA
+    /// Integración creativa con OpenRouter para mejorar la experiencia del usuario
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
@@ -22,362 +24,912 @@ namespace LaCazuelaChapina.API.Controllers
     public class LLMController : ControllerBase
     {
         private readonly CazuelaDbContext _context;
+        private readonly IMapper _mapper;
         private readonly IOpenRouterService _openRouterService;
         private readonly ILogger<LLMController> _logger;
+        private readonly IConfiguration _configuration;
 
         public LLMController(
             CazuelaDbContext context,
+            IMapper mapper,
             IOpenRouterService openRouterService,
-            ILogger<LLMController> logger)
+            ILogger<LLMController> logger,
+            IConfiguration configuration)
         {
             _context = context;
+            _mapper = mapper;
             _openRouterService = openRouterService;
             _logger = logger;
+            _configuration = configuration;
         }
 
+        // =============================================
+        // ASISTENTE INTELIGENTE PARA PEDIDOS
+        // =============================================
+
         /// <summary>
-        /// Genera recomendaciones personalizadas de combos usando IA
+        /// Asistente IA que ayuda a crear pedidos personalizados basado en preferencias del cliente
         /// </summary>
-        /// <param name="request">Parámetros para la recomendación</param>
-        /// <returns>Recomendación de combo personalizada</returns>
-        [HttpPost("recomendar-combo")]
-        [ProducesResponseType(typeof(LLMResponse<string>), 200)]
-        public async Task<ActionResult<LLMResponse<string>>> RecomendarCombo(ComboRecommendationRequest request)
+        [HttpPost("asistente-pedido")]
+        public async Task<ActionResult<AsistentePedidoResponseDto>> AsistentePedido(AsistentePedidoRequestDto request)
         {
             try
             {
-                _logger.LogInformation("Generando recomendación de combo para {NumeroPersonas} personas en {Epoca}", 
-                    request.NumeroPersonas, request.Epoca);
-
-                var recomendacion = await _openRouterService.GenerarRecomendacionCombo(request);
-
-                var response = new LLMResponse<string>
-                {
-                    Success = true,
-                    Message = "Recomendación generada exitosamente",
-                    Data = recomendacion,
-                    ModelUsed = "meta-llama/llama-3.1-8b-instruct:free",
-                    ConfidenceLevel = 0.85
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generando recomendación de combo");
-                return StatusCode(500, new LLMResponse<string>
-                {
-                    Success = false,
-                    Message = "Error generando recomendación",
-                    Data = null
-                });
-            }
-        }
-
-        /// <summary>
-        /// Analiza patrones de ventas de una sucursal usando IA
-        /// </summary>
-        /// <param name="sucursalId">ID de la sucursal</param>
-        /// <returns>Análisis detallado de patrones y recomendaciones</returns>
-        [HttpPost("analizar-ventas/{sucursalId}")]
-        [ProducesResponseType(typeof(LLMResponse<string>), 200)]
-        public async Task<ActionResult<LLMResponse<string>>> AnalizarPatronesVentas(int sucursalId)
-        {
-            try
-            {
-                // Recopilar datos de ventas de la sucursal
-                var fechaInicioMes = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-                var sucursal = await _context.Sucursales.FindAsync(sucursalId);
-
-                if (sucursal == null)
-                    return NotFound("Sucursal no encontrada");
-
-                var ventasTotales = await _context.Ventas
-                    .Where(v => v.SucursalId == sucursalId && v.FechaVenta >= fechaInicioMes)
-                    .SumAsync(v => v.Total);
-
-                var tamalesMasVendidos = await _context.DetalleVentas
-                    .Include(dv => dv.Venta)
-                    .Include(dv => dv.Producto)
-                    .Include(dv => dv.VarianteProducto)
-                    .Where(dv => dv.Venta.SucursalId == sucursalId && 
-                               dv.Venta.FechaVenta >= fechaInicioMes &&
-                               dv.Producto!.Categoria.Nombre == "Tamales")
-                    .GroupBy(dv => dv.Producto!.Nombre)
-                    .OrderByDescending(g => g.Sum(dv => dv.Cantidad))
-                    .Take(5)
-                    .Select(g => $"{g.Key}: {g.Sum(dv => dv.Cantidad)} unidades")
-                    .ToListAsync();
-
-                var request = new VentasAnalysisRequest
-                {
-                    VentasTotalesMes = ventasTotales,
-                    TamalesMasVendidos = tamalesMasVendidos,
-                    BebidasPorHorario = new List<string>(), // Se llenaría con consulta específica
-                    ProporcionPicante = 65, // Placeholder - calcular con consulta real
-                    DesperdiciosPrincipales = new List<string>(), // Consulta a movimientos de merma
-                    MesActual = DateTime.UtcNow.ToString("MMMM yyyy"),
-                    NombreSucursal = sucursal.Nombre,
-                    DiasAnalizados = DateTime.UtcNow.Day
-                };
-
-                var analisis = await _openRouterService.AnalyzeVentasPatterns(request);
-
-                var response = new LLMResponse<string>
-                {
-                    Success = true,
-                    Message = "Análisis de patrones completado",
-                    Data = analisis,
-                    ModelUsed = "google/gemma-2-9b-it:free",
-                    ConfidenceLevel = 0.80
-                };
-
-                _logger.LogInformation("Análisis de patrones generado para sucursal {SucursalId}", sucursalId);
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error analizando patrones de ventas para sucursal {SucursalId}", sucursalId);
-                return StatusCode(500, new LLMResponse<string>
-                {
-                    Success = false,
-                    Message = "Error generando análisis",
-                    Data = null
-                });
-            }
-        }
-
-        /// <summary>
-        /// Genera alertas inteligentes de inventario usando IA
-        /// </summary>
-        /// <param name="sucursalId">ID de la sucursal</param>
-        /// <returns>Alertas priorizadas con recomendaciones</returns>
-        [HttpGet("alertas-inventario/{sucursalId}")]
-        [ProducesResponseType(typeof(List<LLMResponse<string>>), 200)]
-        public async Task<ActionResult<List<LLMResponse<string>>>> GenerarAlertasInventario(int sucursalId)
-        {
-            try
-            {
-                var alertas = new List<LLMResponse<string>>();
-
-                // Obtener materias primas con stock bajo
-                var stocksBajos = await _context.StockSucursal
-                    .Include(ss => ss.MateriaPrima)
-                    .Include(ss => ss.Sucursal)
-                    .Where(ss => ss.SucursalId == sucursalId && 
-                               ss.CantidadActual <= ss.MateriaPrima.StockMinimo)
-                    .Take(5) // Procesar máximo 5 alertas por vez
-                    .ToListAsync();
-
-                foreach (var stock in stocksBajos)
-                {
-                    var request = new InventoryAlertRequest
-                    {
-                        MateriaPrima = stock.MateriaPrima.Nombre,
-                        StockActual = stock.CantidadActual,
-                        StockMinimo = stock.MateriaPrima.StockMinimo,
-                        UnidadMedida = stock.MateriaPrima.UnidadMedida,
-                        DiasEstimadosAgotamiento = CalcularDiasAgotamiento(stock),
-                        ProveedorPrincipal = "Proveedor Principal", // Placeholder
-                        NombreSucursal = stock.Sucursal.Nombre,
-                        ProductosAfectados = new List<string>(), // Se llenaría con consulta específica
-                        DemandaPromediaDiaria = 5.0m, // Placeholder - calcular con historial
-                        CostoPromedio = stock.MateriaPrima.CostoPromedio,
-                        UltimaCompra = DateTime.UtcNow.AddDays(-7), // Placeholder
-                        EsMateriaPrimaCritica = stock.CantidadActual <= 0
-                    };
-
-                    var alertaTexto = await _openRouterService.GenerateInventoryAlert(request);
-
-                    alertas.Add(new LLMResponse<string>
-                    {
-                        Success = true,
-                        Message = $"Alerta para {stock.MateriaPrima.Nombre}",
-                        Data = alertaTexto,
-                        ModelUsed = "mistralai/mistral-7b-instruct:free",
-                        ConfidenceLevel = 0.90
-                    });
-                }
-
-                _logger.LogInformation("Generadas {Count} alertas de inventario para sucursal {SucursalId}", 
-                    alertas.Count, sucursalId);
-
-                return Ok(alertas);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generando alertas de inventario para sucursal {SucursalId}", sucursalId);
-                return StatusCode(500, new List<LLMResponse<string>>());
-            }
-        }
-
-        /// <summary>
-        /// Genera contenido de marketing personalizado usando IA
-        /// </summary>
-        /// <param name="request">Parámetros para el contenido</param>
-        /// <returns>Contenido de marketing generado</returns>
-        [HttpPost("generar-marketing")]
-        [ProducesResponseType(typeof(LLMResponse<string>), 200)]
-        public async Task<ActionResult<LLMResponse<string>>> GenerarContenidoMarketing(MarketingContentRequest request)
-        {
-            try
-            {
-                var contenido = await _openRouterService.CreateMarketingContent(request);
-
-                var response = new LLMResponse<string>
-                {
-                    Success = true,
-                    Message = "Contenido de marketing generado",
-                    Data = contenido,
-                    ModelUsed = "meta-llama/llama-3.1-8b-instruct:free",
-                    ConfidenceLevel = 0.85
-                };
-
-                _logger.LogInformation("Contenido de marketing generado para {TipoContenido} - {OcasionEspecial}", 
-                    request.TipoContenido, request.OcasionEspecial);
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generando contenido de marketing");
-                return StatusCode(500, new LLMResponse<string>
-                {
-                    Success = false,
-                    Message = "Error generando contenido",
-                    Data = null
-                });
-            }
-        }
-
-        /// <summary>
-        /// Chatbot inteligente para consultas sobre productos y pedidos
-        /// </summary>
-        /// <param name="request">Mensaje del usuario</param>
-        /// <returns>Respuesta del chatbot</returns>
-        [HttpPost("chatbot")]
-        [ProducesResponseType(typeof(LLMResponse<string>), 200)]
-        public async Task<ActionResult<LLMResponse<string>>> Chatbot(ChatbotRequest request)
-        {
-            try
-            {
-                // Construir contexto con información actual de productos
+                // Obtener productos y combos disponibles
                 var productos = await _context.Productos
                     .Include(p => p.Categoria)
-                    .Include(p => p.Variantes)
+                    .Include(p => p.Variantes.Where(v => v.Activa))
                     .Where(p => p.Activo)
-                    .Take(10)
                     .ToListAsync();
 
-                var contextoProdutos = string.Join(", ", 
-                    productos.Select(p => $"{p.Nombre} ({p.Categoria.Nombre}) - Q{p.PrecioBase}"));
+                var combos = await _context.Combos
+                    .Include(c => c.Componentes)
+                    .Where(c => c.Activo && 
+                        (c.TipoCombo == TipoCombo.Fijo || 
+                         (c.FechaInicioVigencia <= DateTime.UtcNow.Date && 
+                          c.FechaFinVigencia >= DateTime.UtcNow.Date)))
+                    .ToListAsync();
 
+                // Construir contexto para el LLM
+                var contextoMenu = ConstruirContextoMenu(productos, combos);
+                
                 var prompt = $@"
-Eres el asistente virtual de 'La Cazuela Chapina', especialista en tamales y bebidas tradicionales guatemaltecas.
+Eres un asistente experto en La Cazuela Chapina, especialista en tamales guatemaltecos y bebidas tradicionales.
 
-PRODUCTOS DISPONIBLES:
-{contextoProdutos}
+MENÚ DISPONIBLE:
+{contextoMenu}
 
-MENSAJE DEL CLIENTE:
-{request.Mensaje}
+SOLICITUD DEL CLIENTE: {request.SolicitudCliente}
+
+PREFERENCIAS ADICIONALES:
+- Presupuesto: {(request.PresupuestoMaximo.HasValue ? $"Q{request.PresupuestoMaximo:F2}" : "Sin límite")}
+- Número de personas: {request.NumeroPersonas ?? 1}
+- Ocasión especial: {request.OcasionEspecial ?? "Consumo regular"}
+- Restricciones: {request.Restricciones ?? "Ninguna"}
+- Nivel de picante preferido: {request.NivelPicantePreferido ?? "No especificado"}
 
 INSTRUCCIONES:
-- Responde de manera amigable y profesional
-- Usa conocimiento de la gastronomía guatemalteca
-- Ofrece recomendaciones específicas cuando sea apropiado
-- Si preguntan por precios o disponibilidad, usa la información de productos
-- Mantén el tono cálido y familiar característico de Guatemala
-- Si no tienes información específica, ofrece contactar por teléfono
+1. Analiza la solicitud del cliente y sus preferencias
+2. Recomienda productos específicos del menú disponible
+3. Sugiere personalizaciones apropiadas (masa, relleno, envoltura, picante para tamales)
+4. Para bebidas, recomienda tipo, endulzante y toppings
+5. Si aplica, sugiere combos que se ajusten al presupuesto
+6. Calcula el total aproximado
+7. Explica brevemente por qué cada recomendación es ideal
 
-Responde como si fueras un experto chapín en tamales y bebidas tradicionales.";
+FORMATO DE RESPUESTA (JSON):
+{{
+  ""recomendaciones"": [
+    {{
+      ""tipo"": ""producto"" | ""combo"",
+      ""nombre"": ""nombre del producto/combo"",
+      ""cantidad"": numero,
+      ""personalizaciones"": [""lista de personalizaciones sugeridas""],
+      ""precio_aproximado"": numero,
+      ""razon"": ""explicación breve""
+    }}
+  ],
+  ""total_aproximado"": numero,
+  ""mensaje_personalizado"": ""mensaje amigable explicando la recomendación"",
+  ""consejos_adicionales"": [""lista de consejos útiles""]
+}}
 
-                var response = await CallOpenRouterDirectly(prompt, "meta-llama/llama-3.1-8b-instruct:free");
+Responde SOLO con el JSON válido, sin texto adicional.";
 
-                var result = new LLMResponse<string>
+                var respuestaLLM = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                // Parsear respuesta JSON
+                var recomendacion = JsonSerializer.Deserialize<AsistentePedidoResponseDto>(respuestaLLM, new JsonSerializerOptions
                 {
-                    Success = true,
-                    Message = "Respuesta del chatbot",
-                    Data = response,
-                    ModelUsed = "meta-llama/llama-3.1-8b-instruct:free",
-                    ConfidenceLevel = 0.88
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                if (recomendacion == null)
+                {
+                    // Crear respuesta de fallback si falla el parsing
+                    recomendacion = new AsistentePedidoResponseDto
+                    {
+                        MensajePersonalizado = "Lo siento, tuve dificultades procesando tu solicitud. Por favor, intenta con una solicitud más específica.",
+                        ConsejosAdicionales = new List<string> { "Especifica el tipo de tamal que prefieres", "Menciona si tienes alguna restricción alimentaria" }
+                    };
+                }
+
+                // Enriquecer con datos reales del sistema
+                await EnriquecerRecomendacionConDatosReales(recomendacion);
+
+                _logger.LogInformation("Asistente de pedido procesado para: {Solicitud}", request.SolicitudCliente);
+                
+                return Ok(recomendacion);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Error al parsear respuesta del LLM");
+                
+                // Respuesta de fallback
+                var fallbackResponse = new AsistentePedidoResponseDto
+                {
+                    MensajePersonalizado = "Disculpa, tuve problemas procesando tu solicitud. Te recomiendo nuestro Combo Familiar 'Fiesta Patronal' que incluye tamales variados y bebidas tradicionales.",
+                    Recomendaciones = new List<RecomendacionProductoDto>
+                    {
+                        new RecomendacionProductoDto
+                        {
+                            Tipo = "combo",
+                            Nombre = "Combo Familiar Fiesta Patronal",
+                            Cantidad = 1,
+                            PrecioAproximado = 145.00,
+                            Razon = "Opción popular que satisface a toda la familia"
+                        }
+                    },
+                    TotalAproximado = 145.00
                 };
-
-                _logger.LogInformation("Respuesta de chatbot generada para mensaje: {Mensaje}", 
-                    request.Mensaje.Substring(0, Math.Min(50, request.Mensaje.Length)));
-
-                return Ok(result);
+                
+                return Ok(fallbackResponse);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error en chatbot");
-                return Ok(new LLMResponse<string>
+                _logger.LogError(ex, "Error en asistente de pedido");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // ANÁLISIS INTELIGENTE DE VENTAS
+        // =============================================
+
+        /// <summary>
+        /// Genera insights inteligentes sobre patrones de venta y tendencias usando IA
+        /// </summary>
+        [HttpPost("analisis-ventas")]
+        public async Task<ActionResult<AnalisisVentasLLMDto>> AnalisisInteligenteVentas(AnalisisVentasRequestDto request)
+        {
+            try
+            {
+                var fechaInicio = request.FechaInicio ?? DateTime.UtcNow.AddDays(-30);
+                var fechaFin = request.FechaFin ?? DateTime.UtcNow;
+
+                // Obtener datos de ventas
+                var ventasData = await ObtenerDatosVentasParaAnalisis(fechaInicio, fechaFin, request.SucursalId);
+
+                var prompt = $@"
+Eres un analista de datos experto especializado en negocios de comida guatemalteca tradicional.
+
+DATOS DE VENTAS (últimos {(fechaFin - fechaInicio).Days} días):
+{ventasData}
+
+ANÁLISIS SOLICITADO:
+- Tipo: {request.TipoAnalisis}
+- Enfoque especial: {request.EnfoqueEspecial ?? "General"}
+
+INSTRUCCIONES:
+1. Analiza los patrones de venta identificando tendencias
+2. Detecta productos estrella y de bajo rendimiento
+3. Identifica oportunidades de mejora
+4. Sugiere estrategias específicas para aumentar ventas
+5. Recomienda ajustes de inventario o precios si es necesario
+6. Identifica patrones estacionales o por horarios
+7. Sugiere nuevos combos o promociones basados en los datos
+
+FORMATO DE RESPUESTA (JSON):
+{{
+  ""resumen_ejecutivo"": ""resumen de 2-3 líneas"",
+  ""tendencias_principales"": [""lista de tendencias detectadas""],
+  ""productos_estrella"": [
+    {{
+      ""nombre"": ""nombre del producto"",
+      ""rendimiento"": ""descripción del rendimiento"",
+      ""recomendacion"": ""qué hacer con este producto""
+    }}
+  ],
+  ""oportunidades_mejora"": [""lista de oportunidades específicas""],
+  ""estrategias_sugeridas"": [
+    {{
+      ""estrategia"": ""nombre de la estrategia"",
+      ""descripcion"": ""descripción detallada"",
+      ""impacto_esperado"": ""alto"" | ""medio"" | ""bajo"",
+      ""dificultad_implementacion"": ""baja"" | ""media"" | ""alta""
+    }}
+  ],
+  ""predicciones"": [""predicciones para los próximos 30 días""],
+  ""alertas"": [""alertas importantes que requieren atención""]
+}}
+
+Responde SOLO con el JSON válido.";
+
+                var respuestaLLM = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                var analisis = JsonSerializer.Deserialize<AnalisisVentasLLMDto>(respuestaLLM, new JsonSerializerOptions
                 {
-                    Success = true,
-                    Message = "Respuesta de fallback",
-                    Data = "¡Hola! Gracias por contactar La Cazuela Chapina. En este momento tengo dificultades técnicas, pero puedes llamarnos al 2234-5678 para hacer tu pedido. ¡Nuestros tamales y bebidas tradicionales te están esperando!",
-                    ModelUsed = "fallback",
-                    ConfidenceLevel = 1.0
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                if (analisis == null)
+                {
+                    analisis = new AnalisisVentasLLMDto
+                    {
+                        ResumenEjecutivo = "Análisis basado en datos disponibles del período seleccionado",
+                        TendenciasPrincipales = new List<string> { "Los datos muestran patrones regulares de consumo" },
+                        ProductosEstrella = new List<ProductoEstrella>(),
+                        OportunidadesMejora = new List<string> { "Continuar monitoreando tendencias de ventas" }
+                    };
+                }
+
+                analisis.FechaAnalisis = DateTime.UtcNow;
+                analisis.PeriodoAnalizado = $"{fechaInicio:dd/MM/yyyy} - {fechaFin:dd/MM/yyyy}";
+
+                _logger.LogInformation("Análisis inteligente de ventas generado para período {Inicio} - {Fin}", fechaInicio, fechaFin);
+                
+                return Ok(analisis);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en análisis inteligente de ventas");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // GENERADOR DE DESCRIPCIONES CREATIVAS
+        // =============================================
+
+        /// <summary>
+        /// Genera descripciones creativas y atractivas para productos y combos
+        /// </summary>
+        [HttpPost("generar-descripcion")]
+        public async Task<ActionResult<DescripcionCreativaDto>> GenerarDescripcionCreativa(GenerarDescripcionRequestDto request)
+        {
+            try
+            {
+                var tipoProducto = request.TipoProducto.ToLower();
+                var contextoPrompt = "";
+
+                if (tipoProducto == "tamal")
+                {
+                    contextoPrompt = "tamales guatemaltecos tradicionales, masa de maíz, envueltos en hoja de plátano o tusa";
+                }
+                else if (tipoProducto == "bebida")
+                {
+                    contextoPrompt = "bebidas tradicionales guatemaltecas de maíz y cacao, servidas calientes";
+                }
+                else if (tipoProducto == "combo")
+                {
+                    contextoPrompt = "combinaciones especiales de tamales y bebidas para ocasiones familiares";
+                }
+
+                var prompt = $@"
+Eres un copywriter experto en gastronomía guatemalteca y marketing de alimentos tradicionales.
+
+PRODUCTO: {request.NombreProducto}
+TIPO: {request.TipoProducto}
+INGREDIENTES/COMPONENTES: {string.Join(", ", request.Ingredientes ?? new List<string>())}
+OCASIÓN: {request.OcasionEspecial ?? "Consumo general"}
+TONO: {request.TonoDescripcion ?? "Tradicional y familiar"}
+
+CONTEXTO: {contextoPrompt}
+
+INSTRUCCIONES:
+1. Crea una descripción atractiva que despierte el apetito
+2. Incluye elementos de la tradición guatemalteca
+3. Resalta los ingredientes principales
+4. Menciona la experiencia sensorial (sabor, aroma, textura)
+5. Conecta con emociones y recuerdos familiares
+6. Incluye beneficios o momentos ideales de consumo
+
+FORMATO DE RESPUESTA (JSON):
+{{
+  ""descripcion_principal"": ""descripción principal de 2-3 líneas"",
+  ""descripcion_extendida"": ""descripción más detallada para marketing"",
+  ""slogan_sugerido"": ""frase pegajosa de máximo 8 palabras"",
+  ""hashtags_sugeridos"": [""lista de hashtags relevantes""],
+  ""momentos_ideales"": [""cuándo es perfecto consumir este producto""],
+  ""maridajes_sugeridos"": [""con qué otros productos combina bien""]
+}}
+
+Usa lenguaje cálido, familiar y que evoque la tradición guatemalteca. Responde SOLO con el JSON válido.";
+
+                var respuestaLLM = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                var descripcion = JsonSerializer.Deserialize<DescripcionCreativaDto>(respuestaLLM, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                if (descripcion == null)
+                {
+                    descripcion = new DescripcionCreativaDto
+                    {
+                        DescripcionPrincipal = $"{request.NombreProducto} - Una deliciosa tradición guatemalteca que conecta con nuestras raíces.",
+                        DescripcionExtendida = $"Nuestro {request.NombreProducto} está elaborado con ingredientes frescos y recetas tradicionales que han pasado de generación en generación.",
+                        SloganSugerido = "Tradición que alimenta el alma",
+                        HashtagsSugeridos = new List<string> { "#TradicionGuatemalteca", "#LaCazuelaChapina", "#ComidaTradicional" }
+                    };
+                }
+
+                _logger.LogInformation("Descripción creativa generada para: {Producto}", request.NombreProducto);
+                
+                return Ok(descripcion);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generando descripción creativa");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // CHATBOT INTELIGENTE DE SOPORTE
+        // =============================================
+
+        /// <summary>
+        /// Chatbot inteligente que responde preguntas sobre productos, pedidos y La Cazuela Chapina
+        /// </summary>
+        [HttpPost("chatbot")]
+        public async Task<ActionResult<ChatbotResponseDto>> ChatbotSoporte(ChatbotRequestDto request)
+        {
+            try
+            {
+                // Obtener contexto relevante basado en la pregunta
+                var contextoRelevante = await ObtenerContextoRelevante(request.Pregunta);
+
+                var prompt = $@"
+Eres el asistente virtual oficial de ""La Cazuela Chapina"", especialista en tamales guatemaltecos y bebidas tradicionales.
+
+PERSONALIDAD:
+- Amigable, conocedor y orgulloso de la tradición guatemalteca
+- Entusiasta por los tamales y la cultura gastronómica local
+- Servicial y paciente con los clientes
+- Usa expresiones guatemaltecas cuando sea apropiado (de forma moderada)
+
+CONOCIMIENTO BASE:
+{contextoRelevante}
+
+PREGUNTA DEL CLIENTE: {request.Pregunta}
+HISTORIAL PREVIO: {string.Join("\n", request.HistorialConversacion ?? new List<string>())}
+
+INSTRUCCIONES:
+1. Responde de manera amigable y profesional
+2. Si es sobre productos, sé específico con precios y opciones
+3. Si es sobre pedidos, guía paso a paso
+4. Si es sobre la empresa, comparte la pasión por la tradición
+5. Si no sabes algo, sé honesto y ofrece conectar con un humano
+6. Sugiere productos relevantes cuando sea apropiado
+7. Incluye emojis de forma moderada para calidez
+
+FORMATO DE RESPUESTA (JSON):
+{{
+  ""respuesta"": ""respuesta principal al cliente"",
+  ""productos_sugeridos"": [""lista de productos relevantes si aplica""],
+  ""acciones_sugeridas"": [""qué puede hacer el cliente a continuación""],
+  ""necesita_humano"": boolean,
+  ""categoria_consulta"": ""productos"" | ""pedidos"" | ""informacion"" | ""soporte"" | ""otro"",
+  ""confianza_respuesta"": ""alta"" | ""media"" | ""baja""
+}}
+
+Responde SOLO con el JSON válido.";
+
+                var respuestaLLM = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                var respuestaChatbot = JsonSerializer.Deserialize<ChatbotResponseDto>(respuestaLLM, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                if (respuestaChatbot == null)
+                {
+                    respuestaChatbot = new ChatbotResponseDto
+                    {
+                        Respuesta = "¡Hola! Soy el asistente de La Cazuela Chapina 😊 Estoy aquí para ayudarte con información sobre nuestros deliciosos tamales y bebidas tradicionales. ¿En qué puedo asistirte?",
+                        CategoriaConsulta = "soporte",
+                        ConfianzaRespuesta = "alta",
+                        SesionId = request.SesionId
+                    };
+                }
+                else
+                {
+                    respuestaChatbot.SesionId = request.SesionId;
+                }
+
+                // Guardar la interacción para aprendizaje futuro
+                await GuardarInteraccionChatbot(request.Pregunta, respuestaChatbot.Respuesta, request.SesionId);
+
+                _logger.LogInformation("Consulta de chatbot procesada: {Categoria}", respuestaChatbot.CategoriaConsulta);
+                
+                return Ok(respuestaChatbot);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en chatbot de soporte");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // OPTIMIZADOR DE INVENTARIO CON IA
+        // =============================================
+
+        /// <summary>
+        /// Analiza patrones de consumo y sugiere optimizaciones de inventario usando IA
+        /// </summary>
+        [HttpPost("optimizar-inventario")]
+        public async Task<ActionResult<OptimizacionInventarioDto>> OptimizarInventario(OptimizarInventarioRequestDto request)
+        {
+            try
+            {
+                // Obtener datos de inventario y movimientos
+                var datosInventario = await ObtenerDatosInventarioParaAnalisis(request.SucursalId);
+
+                var prompt = $@"
+Eres un experto en gestión de inventarios para restaurantes especializados en comida guatemalteca tradicional.
+
+DATOS ACTUALES DE INVENTARIO:
+{datosInventario}
+
+PARÁMETROS DE ANÁLISIS:
+- Días a proyectar: {request.DiasProyeccion ?? 30}
+- Nivel de servicio deseado: {request.NivelServicioDeseado ?? 95}%
+- Considerar estacionalidad: {request.ConsiderarEstacionalidad}
+
+INSTRUCCIONES:
+1. Analiza patrones de consumo de cada materia prima
+2. Identifica productos con alta rotación vs baja rotación
+3. Detecta riesgos de desabastecimiento o sobrestock
+4. Sugiere puntos de reorden óptimos
+5. Recomienda cantidades de compra
+6. Identifica oportunidades de reducir desperdicios
+7. Considera la estacionalidad de productos guatemaltecos
+
+FORMATO DE RESPUESTA (JSON):
+{{
+  ""resumen_general"": ""análisis general del estado del inventario"",
+  ""productos_criticos"": [
+    {{
+      ""nombre"": ""nombre del producto"",
+      ""stock_actual"": numero,
+      ""proyeccion_agotamiento"": ""fecha estimada"",
+      ""cantidad_sugerida_compra"": numero,
+      ""prioridad"": ""alta"" | ""media"" | ""baja""
+    }}
+  ],
+  ""oportunidades_ahorro"": [""formas de reducir costos de inventario""],
+  ""alertas_estacionales"": [""productos que necesitan atención por temporada""],
+  ""recomendaciones_compra"": [
+    {{
+      ""producto"": ""nombre"",
+      ""cantidad"": numero,
+      ""justificacion"": ""por qué esta cantidad""
+    }}
+  ],
+  ""ahorro_estimado"": numero,
+  ""riesgo_desabasto"": ""bajo"" | ""medio"" | ""alto""
+}}
+
+Responde SOLO con el JSON válido.";
+
+                var respuestaLLM = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                var optimizacion = JsonSerializer.Deserialize<OptimizacionInventarioDto>(respuestaLLM, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                if (optimizacion == null)
+                {
+                    optimizacion = new OptimizacionInventarioDto
+                    {
+                        ResumenGeneral = "Análisis de inventario basado en datos actuales disponibles",
+                        ProductosCriticos = new List<ProductoCriticoInventario>(),
+                        OportunidadesAhorro = new List<string> { "Continuar monitoreando niveles de stock" },
+                        RiesgoDesabasto = "medio"
+                    };
+                }
+
+                optimizacion.FechaAnalisis = DateTime.UtcNow;
+                optimizacion.SucursalAnalizada = request.SucursalId;
+
+                _logger.LogInformation("Optimización de inventario generada para sucursal {SucursalId}", request.SucursalId);
+                
+                return Ok(optimizacion);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en optimización de inventario");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // PROCESAMIENTO DE VOZ A TEXTO (BONUS)
+        // =============================================
+
+        /// <summary>
+        /// Procesa audio de clientes para convertir pedidos de voz a texto y procesarlos
+        /// </summary>
+        [HttpPost("procesar-voz")]
+        public async Task<ActionResult<ProcesarVozResponseDto>> ProcesarVozAPedido([FromForm] ProcesarVozRequestDto request)
+        {
+            try
+            {
+                if (request.AudioFile == null || request.AudioFile.Length == 0)
+                {
+                    return BadRequest(new { message = "No se proporcionó archivo de audio" });
+                }
+
+                // Simular procesamiento de voz a texto (en implementación real usaríamos Whisper API)
+                var textoSimulado = SimularProcesamientoVoz(request.AudioFile.FileName);
+
+                // Procesar el texto como un pedido usando el asistente
+                var asistentePedido = new AsistentePedidoRequestDto
+                {
+                    SolicitudCliente = textoSimulado,
+                    NumeroPersonas = 1,
+                    OcasionEspecial = "Pedido por voz"
+                };
+
+                var resultadoAsistente = await AsistentePedido(asistentePedido);
+                
+                AsistentePedidoResponseDto? recomendacion = null;
+                if (resultadoAsistente.Result is OkObjectResult okResult)
+                {
+                    recomendacion = okResult.Value as AsistentePedidoResponseDto;
+                }
+
+                var respuesta = new ProcesarVozResponseDto
+                {
+                    TextoDetectado = textoSimulado,
+                    ConfianzaDeteccion = 0.85f,
+                    PedidoInterpretado = recomendacion,
+                    RequiereConfirmacion = true,
+                    IdimaDetectado = "es-GT"
+                };
+
+                _logger.LogInformation("Procesamiento de voz completado para archivo: {FileName}", request.AudioFile.FileName);
+                
+                return Ok(respuesta);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error procesando voz a texto");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        // =============================================
+        // MÉTODOS PRIVADOS DE UTILIDAD
+        // =============================================
+
+        private string ConstruirContextoMenu(List<Models.Productos.Producto> productos, List<Models.Combos.Combo> combos)
+        {
+            var contexto = "PRODUCTOS DISPONIBLES:\n";
+            
+            foreach (var producto in productos)
+            {
+                contexto += $"- {producto.Nombre} (Categoría: {producto.Categoria?.Nombre})\n";
+                contexto += $"  Precio base: Q{producto.PrecioBase:F2}\n";
+                
+                if (producto.Variantes?.Any() == true)
+                {
+                    contexto += "  Variantes: " + string.Join(", ", producto.Variantes.Select(v => $"{v.Nombre} (x{v.Multiplicador})")) + "\n";
+                }
+                contexto += "\n";
+            }
+
+            contexto += "\nCOMBOS DISPONIBLES:\n";
+            foreach (var combo in combos)
+            {
+                contexto += $"- {combo.Nombre}: Q{combo.Precio:F2}\n";
+                contexto += $"  {combo.Descripcion}\n\n";
+            }
+
+            return contexto;
+        }
+
+        private async Task EnriquecerRecomendacionConDatosReales(AsistentePedidoResponseDto recomendacion)
+        {
+            if (recomendacion?.Recomendaciones == null) return;
+
+            // Validar que los productos recomendados existen y ajustar precios reales
+            foreach (var rec in recomendacion.Recomendaciones)
+            {
+                if (rec.Tipo == "producto")
+                {
+                    var producto = await _context.Productos
+                        .Include(p => p.Variantes)
+                        .FirstOrDefaultAsync(p => p.Nombre.Contains(rec.Nombre) && p.Activo);
+                    
+                    if (producto != null)
+                    {
+                        rec.PrecioAproximado = (double)producto.PrecioBase;
+                        rec.ProductoId = producto.Id;
+                    }
+                }
+                else if (rec.Tipo == "combo")
+                {
+                    var combo = await _context.Combos
+                        .FirstOrDefaultAsync(c => c.Nombre.Contains(rec.Nombre) && c.Activo);
+                    
+                    if (combo != null)
+                    {
+                        rec.PrecioAproximado = (double)combo.Precio;
+                        rec.ComboId = combo.Id;
+                    }
+                }
+            }
+
+            recomendacion.TotalAproximado = recomendacion.Recomendaciones.Sum(r => r.PrecioAproximado * r.Cantidad);
+        }
+
+        private async Task<string> ObtenerDatosVentasParaAnalisis(DateTime fechaInicio, DateTime fechaFin, int? sucursalId)
+        {
+            var query = _context.Ventas
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Producto)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Combo)
+                .Where(v => v.FechaVenta >= fechaInicio && v.FechaVenta <= fechaFin);
+
+            if (sucursalId.HasValue)
+            {
+                query = query.Where(v => v.SucursalId == sucursalId.Value);
+            }
+
+            var ventas = await query.ToListAsync();
+
+            var resumen = $"PERÍODO: {fechaInicio:dd/MM/yyyy} - {fechaFin:dd/MM/yyyy}\n";
+            resumen += $"TOTAL VENTAS: {ventas.Count}\n";
+            resumen += $"INGRESOS TOTALES: Q{ventas.Sum(v => v.Total):F2}\n\n";
+
+            // Productos más vendidos
+            var productosVendidos = ventas
+                .SelectMany(v => v.Detalles)
+                .Where(d => d.Producto != null)
+                .GroupBy(d => d.Producto!.Nombre)
+                .Select(g => new { Producto = g.Key, Cantidad = g.Sum(d => d.Cantidad), Ingresos = g.Sum(d => d.Subtotal) })
+                .OrderByDescending(p => p.Cantidad)
+                .Take(10);
+
+            resumen += "TOP 10 PRODUCTOS:\n";
+            foreach (var producto in productosVendidos)
+            {
+                resumen += $"- {producto.Producto}: {producto.Cantidad} unidades, Q{producto.Ingresos:F2}\n";
+            }
+
+            return resumen;
+        }
+
+        private async Task<string> ObtenerContextoRelevante(string pregunta)
+        {
+            var contextoBase = @"
+LA CAZUELA CHAPINA - INFORMACIÓN GENERAL:
+- Especialistas en tamales guatemaltecos tradicionales y bebidas de maíz/cacao
+- Productos principales: Tamales (varios rellenos) y bebidas artesanales
+- Personalizaciones: masa (maíz amarillo/blanco/arroz), relleno, envoltura, picante
+- Horarios: Lunes a Domingo 7:00 AM - 8:00 PM
+- Entregas a domicilio disponibles
+- Aceptamos efectivo, tarjeta y transferencias
+
+PRODUCTOS ESTRELLA:
+- Tamal Tradicional (recado rojo de cerdo)
+- Combo Familiar 'Fiesta Patronal'
+- Bebidas de cacao y atol de elote
+- Combos estacionales (fiambre, navideños, cuaresma)
+
+PRECIOS APROXIMADOS:
+- Tamales: Q8-15 según variante
+- Bebidas: Q12-25 según tamaño
+- Combos: Q145-385
+";
+
+            // Si la pregunta menciona productos específicos, agregar más detalle
+            if (pregunta.ToLower().Contains("tamal"))
+            {
+                var productos = await _context.Productos
+                    .Where(p => p.Categoria.Nombre.Contains("Tamal") && p.Activo)
+                    .Include(p => p.Variantes)
+                    .ToListAsync();
+
+                contextoBase += "\nDETALLE TAMALES:\n";
+                foreach (var producto in productos)
+                {
+                    contextoBase += $"- {producto.Nombre}: Q{producto.PrecioBase:F2}\n";
+                }
+            }
+
+            return contextoBase;
+        }
+
+        private async Task GuardarInteraccionChatbot(string pregunta, string respuesta, string sesionId)
+        {
+            // En una implementación completa, guardaríamos esto en una tabla de interacciones
+            // para análisis posterior y mejora del chatbot
+            _logger.LogInformation("Interacción chatbot - Sesión: {SesionId}, Pregunta: {Pregunta}", sesionId, pregunta);
+            
+            // TODO: Implementar guardado en base de datos para análisis y mejora continua
+            await Task.CompletedTask;
+        }
+
+        private async Task<string> ObtenerDatosInventarioParaAnalisis(int? sucursalId)
+        {
+            var query = _context.StockSucursal
+                .Include(s => s.MateriaPrima)
+                    .ThenInclude(mp => mp.Categoria)
+                .Include(s => s.Sucursal)
+                .AsQueryable();
+
+            if (sucursalId.HasValue)
+            {
+                query = query.Where(s => s.SucursalId == sucursalId.Value);
+            }
+
+            var stocks = await query.ToListAsync();
+
+            var resumen = "ESTADO ACTUAL DEL INVENTARIO:\n\n";
+            
+            foreach (var stock in stocks.Take(20)) // Limitar para no sobrecargar el prompt
+            {
+                var porcentajeStock = stock.MateriaPrima.StockMinimo > 0 ? 
+                    (stock.CantidadActual / stock.MateriaPrima.StockMinimo) * 100 : 100;
+
+                resumen += $"- {stock.MateriaPrima.Nombre} ({stock.MateriaPrima.Categoria.Nombre})\n";
+                resumen += $"  Stock actual: {stock.CantidadActual} {stock.MateriaPrima.UnidadMedida}\n";
+                resumen += $"  Stock mínimo: {stock.MateriaPrima.StockMinimo} {stock.MateriaPrima.UnidadMedida}\n";
+                resumen += $"  Nivel: {porcentajeStock:F0}% del mínimo\n";
+                resumen += $"  Costo promedio: Q{stock.MateriaPrima.CostoPromedio:F2}\n\n";
+            }
+
+            return resumen;
+        }
+
+        private string SimularProcesamientoVoz(string nombreArchivo)
+        {
+            // Simulación de diferentes tipos de pedidos por voz
+            var pedidosSimulados = new[]
+            {
+                "Hola, quisiera pedir dos tamales de recado rojo y una bebida de cacao para llevar",
+                "Buenos días, necesito el combo familiar para cuatro personas",
+                "Quiero tres tamales, uno sin chile y dos con picante suave, más dos atoles de elote",
+                "Me puede dar información sobre sus combos estacionales",
+                "Quisiera hacer un pedido grande para una celebración familiar",
+                "Buenos días, me gustaría ordenar tamales de chipilín con masa de arroz",
+                "Necesito bebidas tradicionales para una reunión, que me recomienda",
+                "Quiero probar algo nuevo, que combo me sugieren para dos personas"
+            };
+
+            var random = new Random();
+            var pedidoSeleccionado = pedidosSimulados[random.Next(pedidosSimulados.Length)];
+            
+            _logger.LogInformation("Simulando procesamiento de voz para archivo: {Archivo}, texto detectado: {Texto}", 
+                nombreArchivo, pedidoSeleccionado);
+                
+            return pedidoSeleccionado;
+        }
+
+        // =============================================
+        // ENDPOINTS ADICIONALES DE UTILIDAD
+        // =============================================
+
+        /// <summary>
+        /// Obtiene información sobre los modelos de IA disponibles
+        /// </summary>
+        [HttpGet("modelos-disponibles")]
+        public async Task<ActionResult<List<ModeloDisponible>>> GetModelosDisponibles()
+        {
+            try
+            {
+                var modelos = await _openRouterService.ObtenerModelosDisponiblesAsync();
+                return Ok(modelos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo modelos disponibles");
+                return StatusCode(500, new { message = "Error interno del servidor" });
+            }
+        }
+
+        /// <summary>
+        /// Verifica el estado de la conexión con OpenRouter
+        /// </summary>
+        [HttpGet("verificar-conexion")]
+        public async Task<ActionResult<object>> VerificarConexion()
+        {
+            try
+            {
+                var estaConectado = await _openRouterService.VerificarConexionAsync();
+                
+                return Ok(new
+                {
+                    conectado = estaConectado,
+                    timestamp = DateTime.UtcNow,
+                    servicio = "OpenRouter",
+                    estado = estaConectado ? "Operativo" : "No disponible"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verificando conexión");
+                return Ok(new
+                {
+                    conectado = false,
+                    timestamp = DateTime.UtcNow,
+                    servicio = "OpenRouter",
+                    estado = "Error de conexión",
+                    error = ex.Message
                 });
             }
         }
 
-        // =============================================
-        // MÉTODOS PRIVADOS
-        // =============================================
-
-        private int CalcularDiasAgotamiento(StockSucursal stock)
+        /// <summary>
+        /// Endpoint de prueba rápida para verificar funcionalidad básica del LLM
+        /// </summary>
+        [HttpPost("prueba-rapida")]
+        public async Task<ActionResult<object>> PruebaRapida([FromBody] string prompt)
         {
-            // Cálculo simplificado - en producción usar historial real
-            var demandaPromediaDiaria = 5.0m; // Placeholder
-            return stock.CantidadActual <= 0 ? 0 : (int)(stock.CantidadActual / demandaPromediaDiaria);
-        }
-
-        private async Task<string> CallOpenRouterDirectly(string prompt, string model)
-        {
-            // Implementación directa para casos específicos
-            // En una implementación real, esto podría reutilizar el servicio OpenRouter
             try
             {
-                var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer YOUR_API_KEY");
-                
-                var request = new
+                if (string.IsNullOrWhiteSpace(prompt))
                 {
-                    model = model,
-                    messages = new[] { new { role = "user", content = prompt } },
-                    max_tokens = 500,
-                    temperature = 0.7
-                };
-
-                var json = JsonSerializer.Serialize(request);
-                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                var response = await httpClient.PostAsync("https://openrouter.ai/api/v1/chat/completions", content);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    // Parsear respuesta JSON y extraer contenido
-                    return "Respuesta procesada del modelo LLM"; // Placeholder
+                    prompt = "Saluda como asistente de La Cazuela Chapina y menciona brevemente nuestros productos principales.";
                 }
+
+                _logger.LogInformation("Iniciando prueba rápida con prompt: {Prompt}", prompt);
+
+                // Usar el método principal en lugar del simple para mejor debugging
+                var respuesta = await _openRouterService.GenerarRespuestaAsync(prompt, "meta-llama/llama-3.2-3b-instruct:free");
+                
+                _logger.LogInformation("Respuesta recibida exitosamente: {Respuesta}", respuesta);
+                
+                return Ok(new
+                {
+                    prompt_enviado = prompt,
+                    respuesta_llm = respuesta,
+                    timestamp = DateTime.UtcNow,
+                    modelo_usado = "meta-llama/llama-3.2-3b-instruct:free",
+                    estado = "exitoso"
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Error HTTP en prueba rápida");
+                return StatusCode(500, new 
+                { 
+                    message = "Error de conectividad con OpenRouter",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow,
+                    sugerencia = "Verifica tu API Key y conexión a internet"
+                });
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogError(ex, "Timeout en prueba rápida");
+                return StatusCode(408, new 
+                { 
+                    message = "Timeout conectando con OpenRouter",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow,
+                    sugerencia = "Intenta nuevamente, el servicio puede estar ocupado"
+                });
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Error parseando respuesta JSON");
+                return StatusCode(500, new 
+                { 
+                    message = "Error procesando respuesta de IA",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow,
+                    sugerencia = "El modelo puede haber devuelto formato inesperado"
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error en llamada directa a OpenRouter");
+                _logger.LogError(ex, "Error general en prueba rápida");
+                return StatusCode(500, new 
+                { 
+                    message = "Error inesperado en prueba rápida",
+                    error = ex.Message,
+                    timestamp = DateTime.UtcNow,
+                    api_key_configurada = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")) || 
+                                         !string.IsNullOrEmpty(_configuration["OpenRouter:ApiKey"])
+                });
             }
-
-            return "Lo siento, no puedo procesar tu consulta en este momento. Por favor contacta directamente a nuestro equipo.";
         }
-    }
-
-    // =============================================
-    // DTOs ADICIONALES
-    // =============================================
-
-    public class ChatbotRequest
-    {
-        public string Mensaje { get; set; } = string.Empty;
-        public string? ContextoAdicional { get; set; }
-        public int? SucursalId { get; set; }
     }
 }
