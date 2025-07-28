@@ -53,15 +53,65 @@ namespace LaCazuelaChapina.API.Mappings
             // VarianteProducto -> VarianteProductoDto
             CreateMap<VarianteProducto, VarianteProductoDto>();
         }
-
         private void ConfigurePersonalizationMappings()
         {
             // TipoAtributo -> TipoAtributoDto
             CreateMap<TipoAtributo, TipoAtributoDto>()
                 .ForMember(dest => dest.Opciones, opt => opt.MapFrom(src => src.Opciones.Where(o => o.Activa).OrderBy(o => o.Orden)));
 
+            // TipoAtributo -> TipoAtributoDetalleDto
+            CreateMap<TipoAtributo, TipoAtributoDetalleDto>()
+                .ForMember(dest => dest.CategoriaNombre, opt => opt.MapFrom(src => src.Categoria.Nombre))
+                .ForMember(dest => dest.OpcionesActivas, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.VecesUtilizado, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.UltimoUso, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EstadoUso, opt => opt.Ignore()); // Se calcula en el DTO
+
+            // CrearTipoAtributoDto -> TipoAtributo
+            CreateMap<CrearTipoAtributoDto, TipoAtributo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.Orden, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.Categoria, opt => opt.Ignore())
+                .ForMember(dest => dest.Opciones, opt => opt.Ignore())
+                .ForMember(dest => dest.PersonalizacionesVenta, opt => opt.Ignore());
+
+            // ActualizarTipoAtributoDto -> TipoAtributo
+            CreateMap<ActualizarTipoAtributoDto, TipoAtributo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CategoriaId, opt => opt.Ignore())
+                .ForMember(dest => dest.Orden, opt => opt.Ignore())
+                .ForMember(dest => dest.Categoria, opt => opt.Ignore())
+                .ForMember(dest => dest.Opciones, opt => opt.Ignore())
+                .ForMember(dest => dest.PersonalizacionesVenta, opt => opt.Ignore());
+
             // OpcionAtributo -> OpcionAtributoDto
             CreateMap<OpcionAtributo, OpcionAtributoDto>();
+
+            // OpcionAtributo -> OpcionAtributoDetalleDto
+            CreateMap<OpcionAtributo, OpcionAtributoDetalleDto>()
+                .ForMember(dest => dest.TipoAtributoNombre, opt => opt.MapFrom(src => src.TipoAtributo.Nombre))
+                .ForMember(dest => dest.CategoriaNombre, opt => opt.MapFrom(src => src.TipoAtributo.Categoria.Nombre))
+                .ForMember(dest => dest.VecesUtilizada, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.UltimoUso, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.EstadoUso, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.IngresosGenerados, opt => opt.Ignore()); // Se calcula en el DTO
+
+            // CrearOpcionAtributoDto -> OpcionAtributo
+            CreateMap<CrearOpcionAtributoDto, OpcionAtributo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoAtributoId, opt => opt.Ignore()) // Se establece en el controller
+                .ForMember(dest => dest.Activa, opt => opt.MapFrom(src => true))
+                .ForMember(dest => dest.Orden, opt => opt.Ignore()) // Se calcula en el controller
+                .ForMember(dest => dest.TipoAtributo, opt => opt.Ignore())
+                .ForMember(dest => dest.PersonalizacionesVenta, opt => opt.Ignore());
+
+            // ActualizarOpcionAtributoDto -> OpcionAtributo
+            CreateMap<ActualizarOpcionAtributoDto, OpcionAtributo>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoAtributoId, opt => opt.Ignore())
+                .ForMember(dest => dest.Orden, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoAtributo, opt => opt.Ignore())
+                .ForMember(dest => dest.PersonalizacionesVenta, opt => opt.Ignore());
 
             // PersonalizacionDto -> PersonalizacionVenta
             CreateMap<PersonalizacionDto, PersonalizacionVenta>();
