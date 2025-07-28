@@ -18,6 +18,8 @@ using LaCazuelaChapina.API.DTOs.Inventario;
 using LaCazuelaChapina.API.DTOs.Dashboard;
 using LaCazuelaChapina.API.Models.Sucursales;
 using LaCazuelaChapina.API.DTOs.Sucursales;
+using LaCazuelaChapina.API.DTOs.Notificaciones;
+using LaCazuelaChapina.API.Models.Notificaciones;
 
 namespace LaCazuelaChapina.API.Mappings
 {
@@ -35,6 +37,7 @@ namespace LaCazuelaChapina.API.Mappings
             ConfigureDashboardMappings();
             ConfigureInventoryMappings();
             ConfigureSucursalesMappings();
+            ConfigureNotificacionesMappings();
         }
 
         private void ConfigureProductMappings()
@@ -197,8 +200,8 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src =>
                     $"Ajuste por {src.Motivo} - Responsable: {src.ResponsableAjuste}"));
         }
-        
-                private void ConfigureSucursalesMappings()
+
+        private void ConfigureSucursalesMappings()
         {
             // Sucursal -> SucursalDto
             CreateMap<Sucursal, SucursalDto>();
@@ -223,6 +226,52 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore())
                 .ForMember(dest => dest.FechaActualizacion, opt => opt.Ignore());
+        }
+
+        private void ConfigureNotificacionesMappings()
+        {
+            // Notificacion -> NotificacionDto
+            CreateMap<Notificacion, NotificacionDto>()
+                .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal.Nombre))
+                .ForMember(dest => dest.TipoNotificacionTexto, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.TiempoTranscurrido, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.EstadoTexto, opt => opt.Ignore()) // Se calcula en el DTO
+                .ForMember(dest => dest.IconoTipo, opt => opt.Ignore()); // Se calcula en el DTO
+
+            // CrearNotificacionVentaDto -> Notificacion (mapeo básico, se completa en el controller)
+            CreateMap<CrearNotificacionVentaDto, Notificacion>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.SucursalId, opt => opt.Ignore()) // Se establece desde la venta
+                .ForMember(dest => dest.TipoNotificacion, opt => opt.MapFrom(src => TipoNotificacion.Venta))
+                .ForMember(dest => dest.Titulo, opt => opt.Ignore()) // Se genera en el controller
+                .ForMember(dest => dest.Mensaje, opt => opt.Ignore()) // Se genera en el controller
+                .ForMember(dest => dest.FechaCreacion, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.Enviada, opt => opt.MapFrom(src => false))
+                .ForMember(dest => dest.FechaEnvio, opt => opt.Ignore())
+                .ForMember(dest => dest.ReferenciaId, opt => opt.MapFrom(src => src.VentaId))
+                .ForMember(dest => dest.Sucursal, opt => opt.Ignore());
+
+            // CrearNotificacionFinCoccionDto -> Notificacion
+            CreateMap<CrearNotificacionFinCoccionDto, Notificacion>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoNotificacion, opt => opt.MapFrom(src => TipoNotificacion.FinCoccion))
+                .ForMember(dest => dest.Titulo, opt => opt.MapFrom(src => "Lote de Cocción Completado"))
+                .ForMember(dest => dest.Mensaje, opt => opt.MapFrom(src =>
+                    $"Lote de {src.TipoProducto} completado - {src.Cantidad} unidades listas"))
+                .ForMember(dest => dest.FechaCreacion, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.Enviada, opt => opt.MapFrom(src => false))
+                .ForMember(dest => dest.FechaEnvio, opt => opt.Ignore())
+                .ForMember(dest => dest.ReferenciaId, opt => opt.MapFrom(src => src.LoteId))
+                .ForMember(dest => dest.Sucursal, opt => opt.Ignore());
+
+            // CrearNotificacionSistemaDto -> Notificacion
+            CreateMap<CrearNotificacionSistemaDto, Notificacion>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.TipoNotificacion, opt => opt.MapFrom(src => TipoNotificacion.Sistema))
+                .ForMember(dest => dest.FechaCreacion, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.Enviada, opt => opt.MapFrom(src => false))
+                .ForMember(dest => dest.FechaEnvio, opt => opt.Ignore())
+                .ForMember(dest => dest.Sucursal, opt => opt.Ignore());
         }
     }
 
