@@ -16,6 +16,8 @@ using LaCazuelaChapina.API.DTOs.Combos;
 using LaCazuelaChapina.API.Models.Inventario;
 using LaCazuelaChapina.API.DTOs.Inventario;
 using LaCazuelaChapina.API.DTOs.Dashboard;
+using LaCazuelaChapina.API.Models.Sucursales;
+using LaCazuelaChapina.API.DTOs.Sucursales;
 
 namespace LaCazuelaChapina.API.Mappings
 {
@@ -32,7 +34,7 @@ namespace LaCazuelaChapina.API.Mappings
             ConfigureSalesMappings();
             ConfigureDashboardMappings();
             ConfigureInventoryMappings();
-            ConfigureDashboardMappings();
+            ConfigureSucursalesMappings();
         }
 
         private void ConfigureProductMappings()
@@ -124,7 +126,7 @@ namespace LaCazuelaChapina.API.Mappings
             // Para mapear datos básicos cuando sea necesario
             CreateMap<Venta, VentaPorDiaDto>()
                 .ForMember(dest => dest.Fecha, opt => opt.MapFrom(src => src.FechaVenta.Date))
-                .ForMember(dest => dest.DiaNombre, opt => opt.MapFrom(src => 
+                .ForMember(dest => dest.DiaNombre, opt => opt.MapFrom(src =>
                     src.FechaVenta.ToString("dddd", new System.Globalization.CultureInfo("es-ES"))))
                 .ForMember(dest => dest.MontoVentas, opt => opt.MapFrom(src => src.Total))
                 .ForMember(dest => dest.CantidadTransacciones, opt => opt.MapFrom(src => 1))
@@ -194,6 +196,33 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.MontoTotal, opt => opt.Ignore()) // Se calcula después
                 .ForMember(dest => dest.Motivo, opt => opt.MapFrom(src =>
                     $"Ajuste por {src.Motivo} - Responsable: {src.ResponsableAjuste}"));
+        }
+        
+                private void ConfigureSucursalesMappings()
+        {
+            // Sucursal -> SucursalDto
+            CreateMap<Sucursal, SucursalDto>();
+
+            // Sucursal -> SucursalDetalleDto
+            CreateMap<Sucursal, SucursalDetalleDto>()
+                .ForMember(dest => dest.VentasHoy, opt => opt.Ignore())
+                .ForMember(dest => dest.IngresosDiarios, opt => opt.Ignore())
+                .ForMember(dest => dest.ProductosCriticos, opt => opt.Ignore())
+                .ForMember(dest => dest.UltimaVenta, opt => opt.Ignore())
+                .ForMember(dest => dest.EstadoOperativo, opt => opt.Ignore());
+
+            // CrearSucursalDto -> Sucursal
+            CreateMap<CrearSucursalDto, Sucursal>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.Activa, opt => opt.MapFrom(src => true))
+                .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore())
+                .ForMember(dest => dest.FechaActualizacion, opt => opt.Ignore());
+
+            // ActualizarSucursalDto -> Sucursal
+            CreateMap<ActualizarSucursalDto, Sucursal>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore())
+                .ForMember(dest => dest.FechaActualizacion, opt => opt.Ignore());
         }
     }
 
