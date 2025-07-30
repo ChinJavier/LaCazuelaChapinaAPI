@@ -175,42 +175,54 @@ namespace LaCazuelaChapina.API.Mappings
                 .ForMember(dest => dest.VarianteProducto, opt => opt.Ignore())
                 .ForMember(dest => dest.Combo, opt => opt.Ignore());
         }
-        private void ConfigureSalesMappings()
-        {
+private void ConfigureSalesMappings()
+{
+    // CrearVentaDto -> Venta
+    CreateMap<CrearVentaDto, Venta>()
+        .ForMember(dest => dest.FechaVenta, opt => opt.MapFrom(src => DateTime.UtcNow))
+        .ForMember(dest => dest.EstadoVenta, opt => opt.MapFrom(src => EstadoVenta.Completada))
+        .ForMember(dest => dest.Detalles, opt => opt.MapFrom(src => src.Detalles));
 
-            // CrearVentaDto -> Venta
-            CreateMap<CrearVentaDto, Venta>()
-                .ForMember(dest => dest.FechaVenta, opt => opt.MapFrom(src => DateTime.UtcNow))
-                .ForMember(dest => dest.EstadoVenta, opt => opt.MapFrom(src => EstadoVenta.Completada))
-                .ForMember(dest => dest.Detalles, opt => opt.MapFrom(src => src.Detalles));
+    // DetalleVentaDto -> DetalleVenta
+    CreateMap<DetalleVentaDto, DetalleVenta>()
+        .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
 
-            // DetalleVentaDto -> DetalleVenta
-            CreateMap<DetalleVentaDto, DetalleVenta>()
-                .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
+    // ⭐ MAPEO PRINCIPAL ACTUALIZADO - Venta -> VentaDto
+    CreateMap<Venta, VentaDto>()
+        .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+        .ForMember(dest => dest.NumeroVenta, opt => opt.MapFrom(src => src.NumeroVenta))
+        .ForMember(dest => dest.FechaVenta, opt => opt.MapFrom(src => src.FechaVenta))
+        .ForMember(dest => dest.Subtotal, opt => opt.MapFrom(src => src.Subtotal))
+        .ForMember(dest => dest.Descuento, opt => opt.MapFrom(src => src.Descuento))
+        .ForMember(dest => dest.Total, opt => opt.MapFrom(src => src.Total))
+        .ForMember(dest => dest.TipoPago, opt => opt.MapFrom(src => src.TipoPago))
+        .ForMember(dest => dest.EstadoVenta, opt => opt.MapFrom(src => src.EstadoVenta))
+        .ForMember(dest => dest.ClienteNombre, opt => opt.MapFrom(src => src.ClienteNombre))
+        .ForMember(dest => dest.ClienteTelefono, opt => opt.MapFrom(src => src.ClienteTelefono))
+        .ForMember(dest => dest.EsVentaOffline, opt => opt.MapFrom(src => src.EsVentaOffline))
+        .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal != null ? src.Sucursal.Nombre : ""))
+        .ForMember(dest => dest.Detalles, opt => opt.MapFrom(src => src.Detalles));
 
-            // Venta -> VentaDto
-            CreateMap<Venta, VentaDto>()
-                .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal.Nombre))
-                .ForMember(dest => dest.Detalles, opt => opt.MapFrom(src => src.Detalles));
+    // Venta -> VentaResumenDto  
+    CreateMap<Venta, VentaResumenDto>()
+        .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal != null ? src.Sucursal.Nombre : ""))
+        .ForMember(dest => dest.CantidadItems, opt => opt.MapFrom(src => src.Detalles.Sum(d => d.Cantidad)));
 
-            // Venta -> VentaResumenDto
-            CreateMap<Venta, VentaResumenDto>()
-                .ForMember(dest => dest.SucursalNombre, opt => opt.MapFrom(src => src.Sucursal.Nombre))
-                .ForMember(dest => dest.CantidadItems, opt => opt.MapFrom(src => src.Detalles.Sum(d => d.Cantidad)));
+    // DetalleVenta -> DetalleVentaResponseDto
+    CreateMap<DetalleVenta, DetalleVentaResponseDto>()
+        .ForMember(dest => dest.ProductoNombre,
+            opt => opt.MapFrom(src => src.Producto != null ? src.Producto.Nombre : 
+                                     src.Combo != null ? src.Combo.Nombre : ""))
+        .ForMember(dest => dest.VarianteNombre,
+            opt => opt.MapFrom(src => src.VarianteProducto != null ? src.VarianteProducto.Nombre : null))
+        .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
 
-            // DetalleVenta -> DetalleVentaResponseDto
-            CreateMap<DetalleVenta, DetalleVentaResponseDto>()
-                .ForMember(dest => dest.ProductoNombre,
-                    opt => opt.MapFrom(src => src.Producto != null ? src.Producto.Nombre : src.Combo!.Nombre))
-                .ForMember(dest => dest.VarianteNombre,
-                    opt => opt.MapFrom(src => src.VarianteProducto != null ? src.VarianteProducto.Nombre : null))
-                .ForMember(dest => dest.Personalizaciones, opt => opt.MapFrom(src => src.Personalizaciones));
+    // PersonalizacionVenta -> PersonalizacionResponseDto
+    CreateMap<PersonalizacionVenta, PersonalizacionResponseDto>()
+        .ForMember(dest => dest.TipoAtributoNombre, opt => opt.MapFrom(src => src.TipoAtributo != null ? src.TipoAtributo.Nombre : ""))
+        .ForMember(dest => dest.OpcionNombre, opt => opt.MapFrom(src => src.OpcionAtributo != null ? src.OpcionAtributo.Nombre : ""));
+}
 
-            // PersonalizacionVenta -> PersonalizacionResponseDto
-            CreateMap<PersonalizacionVenta, PersonalizacionResponseDto>()
-                .ForMember(dest => dest.TipoAtributoNombre, opt => opt.MapFrom(src => src.TipoAtributo.Nombre))
-                .ForMember(dest => dest.OpcionNombre, opt => opt.MapFrom(src => src.OpcionAtributo.Nombre));
-        }
         private void ConfigureDashboardMappings()
         {
             // La mayoría de los DTOs del dashboard se construyen directamente en el controller
@@ -380,43 +392,5 @@ namespace LaCazuelaChapina.API.Mappings
         }
     }
 
-    // =============================================
-    // DTOs ADICIONALES PARA RESPUESTAS
-    // =============================================
 
-    public class VentaDto
-    {
-        public int Id { get; set; }
-        public string NumeroVenta { get; set; } = string.Empty;
-        public DateTime FechaVenta { get; set; }
-        public decimal Subtotal { get; set; }
-        public decimal Descuento { get; set; }
-        public decimal Total { get; set; }
-        public TipoPago TipoPago { get; set; }
-        public EstadoVenta EstadoVenta { get; set; }
-        public string? ClienteNombre { get; set; }
-        public string? ClienteTelefono { get; set; }
-        public string SucursalNombre { get; set; } = string.Empty;
-        public List<DetalleVentaResponseDto> Detalles { get; set; } = new();
-    }
-
-    public class DetalleVentaResponseDto
-    {
-        public int Id { get; set; }
-        public string ProductoNombre { get; set; } = string.Empty;
-        public string? VarianteNombre { get; set; }
-        public int Cantidad { get; set; }
-        public decimal PrecioUnitario { get; set; }
-        public decimal Subtotal { get; set; }
-        public string? Notas { get; set; }
-        public List<PersonalizacionResponseDto> Personalizaciones { get; set; } = new();
-    }
-
-    public class PersonalizacionResponseDto
-    {
-        public int Id { get; set; }
-        public string TipoAtributoNombre { get; set; } = string.Empty;
-        public string OpcionNombre { get; set; } = string.Empty;
-        public decimal PrecioAdicional { get; set; }
-    }
 }

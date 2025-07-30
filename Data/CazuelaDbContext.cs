@@ -79,32 +79,41 @@ namespace LaCazuelaChapina.API.Data
             ConfigureConstraints(modelBuilder);
         }
 
-        private void ConfigureEnums(ModelBuilder modelBuilder)
-        {
-            // Configurar ENUMs de PostgreSQL
-            modelBuilder.HasPostgresEnum<TipoCombo>("tipo_combo");
-            modelBuilder.HasPostgresEnum<TipoMovimiento>("tipo_movimiento");
-            modelBuilder.HasPostgresEnum<TipoPago>("tipo_pago");
-            modelBuilder.HasPostgresEnum<EstadoVenta>("estado_venta");
-            modelBuilder.HasPostgresEnum<TipoNotificacion>("tipo_notificacion");
+private void ConfigureEnums(ModelBuilder modelBuilder)
+{
+    // Configurar enums como strings en lugar de PostgreSQL enums nativos
+    // Esto es más compatible y evita problemas de mapeo
+    
+    modelBuilder.Entity<Venta>()
+        .Property(e => e.EstadoVenta)
+        .HasConversion<string>()
+        .HasColumnType("varchar(20)")
+        .HasMaxLength(20);
 
-                // Configurar conversiones explícitas para ENUMs
-            modelBuilder.Entity<Venta>()
-                .Property(e => e.EstadoVenta)
-                .HasConversion<string>();
+    modelBuilder.Entity<Venta>()
+        .Property(e => e.TipoPago)
+        .HasConversion<string>()
+        .HasColumnType("varchar(20)")
+        .HasMaxLength(20);
 
-            modelBuilder.Entity<Venta>()
-                .Property(e => e.TipoPago)
-                .HasConversion<string>();
+    modelBuilder.Entity<MovimientoInventario>()
+        .Property(e => e.TipoMovimiento)
+        .HasConversion<string>()
+        .HasColumnType("varchar(20)")
+        .HasMaxLength(20);
 
-            modelBuilder.Entity<MovimientoInventario>()
-                .Property(e => e.TipoMovimiento)
-                .HasConversion<string>();
+    modelBuilder.Entity<Combo>()
+        .Property(e => e.TipoCombo)
+        .HasConversion<string>()
+        .HasColumnType("varchar(20)")
+        .HasMaxLength(20);
 
-            modelBuilder.Entity<Combo>()
-                .Property(e => e.TipoCombo)
-                .HasConversion<string>();
-                }
+    modelBuilder.Entity<Notificacion>()
+        .Property(e => e.TipoNotificacion)
+        .HasConversion<string>()
+        .HasColumnType("varchar(30)")
+        .HasMaxLength(30);
+}
 
         private void ConfigureRelationships(ModelBuilder modelBuilder)
         {

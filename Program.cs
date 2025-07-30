@@ -43,9 +43,10 @@ builder.Services.AddAutoMapper(Assembly.GetExecutingAssembly());
 // 3. Configurar FluentValidation
 builder.Services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
+// 4. Configurar servicios de aplicación
 builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
 
-// 4. Configurar Controllers con validación
+// 5. Configurar Controllers con validación
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -65,7 +66,7 @@ builder.Services.AddControllers()
         };
     });
 
-// 5. Configurar Swagger/OpenAPI
+// 6. Configurar Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -93,7 +94,7 @@ builder.Services.AddSwaggerGen(c =>
     c.SchemaFilter<EnumSchemaFilter>();
 });
 
-// 6. Configurar CORS para desarrollo
+// 7. Configurar CORS para desarrollo
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevelopmentPolicy", policy =>
@@ -112,10 +113,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 7. Configurar servicios de aplicación
-builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
-
-// Configurar HttpClient para OpenRouter con configuración específica
+// 8. Configurar HttpClient para OpenRouter
 builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>("OpenRouter", client =>
 {
     client.BaseAddress = new Uri("https://openrouter.ai/api/v1/");
@@ -123,14 +121,14 @@ builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>("OpenRoute
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-// 8. Configurar HttpClient para integraciones LLM
+// 9. Configurar HttpClient para integraciones LLM
 builder.Services.AddHttpClient("OpenRouter", client =>
 {
     client.BaseAddress = new Uri("https://openrouter.ai/api/v1/");
     client.DefaultRequestHeaders.Add("User-Agent", "LaCazuelaChapina/1.0");
 });
 
-// 9. Configurar logging
+// 10. Configurar logging
 builder.Services.AddLogging(config =>
 {
     config.AddConsole();
@@ -140,7 +138,7 @@ builder.Services.AddLogging(config =>
     }
 });
 
-// 10. Configurar compresión de respuestas
+// 11. Configurar compresión de respuestas
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;

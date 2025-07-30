@@ -22,21 +22,22 @@ namespace LaCazuelaChapina.API.DTOs.Ventas
         public List<PersonalizacionDto> Personalizaciones { get; set; } = new();
     }
 
-    public class VentaDto
-    {
-        public int Id { get; set; }
-        public string NumeroVenta { get; set; } = string.Empty;
-        public DateTime FechaVenta { get; set; }
-        public decimal Subtotal { get; set; }
-        public decimal Descuento { get; set; }
-        public decimal Total { get; set; }
-        public TipoPago TipoPago { get; set; }
-        public EstadoVenta EstadoVenta { get; set; }
-        public string? ClienteNombre { get; set; }
-        public string? ClienteTelefono { get; set; }
-        public string SucursalNombre { get; set; } = string.Empty;
-        public List<DetalleVentaResponseDto> Detalles { get; set; } = new();
-    }
+public class VentaDto
+{
+    public int Id { get; set; }
+    public string NumeroVenta { get; set; } = string.Empty;
+    public DateTime FechaVenta { get; set; }
+    public decimal Subtotal { get; set; }
+    public decimal Descuento { get; set; }
+    public decimal Total { get; set; }
+    public TipoPago TipoPago { get; set; }
+    public EstadoVenta EstadoVenta { get; set; }
+    public string? ClienteNombre { get; set; }
+    public string? ClienteTelefono { get; set; }
+    public bool EsVentaOffline { get; set; } // ⭐ Agregar esta propiedad
+    public string SucursalNombre { get; set; } = string.Empty;
+    public List<DetalleVentaResponseDto> Detalles { get; set; } = new();
+}
 
     public class DetalleVentaResponseDto
     {
